@@ -128,7 +128,7 @@ export const checkHomeStudyAPIHealth = async (): Promise<boolean> => {
   }
 };
 
-// 📤 Main Sync Function
+// 📤 Main Sync Function - একক রেকর্ড Push
 export const syncHomeStudy = async (caseNumber: string, assessmentData: any): Promise<HomeStudySyncResponse> => {
   if (USE_MOCK_MODE) {
     return await mockSyncHomeStudy(caseNumber, assessmentData);
@@ -181,7 +181,7 @@ export const syncHomeStudy = async (caseNumber: string, assessmentData: any): Pr
   }
 };
 
-// 📤 Bulk Sync Function
+// 📤 Bulk Sync Function - সব রেকর্ড Push
 export const syncMultipleHomeStudies = async (assessments: any[]): Promise<{
   success: boolean;
   results: Array<{ caseNumber: string; success: boolean; error?: string }>;
