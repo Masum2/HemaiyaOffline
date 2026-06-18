@@ -27,7 +27,8 @@ const INITIAL_FORM_STATE: HomeStudyAssessmentData = {
   assessmentDate: new Date().toISOString().split('T')[0],
   assessmentTime: '10:00 AM',
   familyName: '',
-  firstName: '',
+  caregiverFirstName: '',
+  caregiverLastName: '',
   caregiverName: '',
   contacts: '',
   sourceOfReferral: '',
@@ -296,32 +297,7 @@ const FcHomeStudyAssessment: React.FC = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (e?: React.FormEvent, updatedData?: HomeStudyAssessmentData) => {
-    if (e) e.preventDefault();
-    const dataToSave = updatedData || formData;
-
-    if (!dataToSave.familyName || !dataToSave.firstName) {
-      toast.error('❌ Family Name and First Name are required!');
-      return;
-    }
-
-    try {
-      if (editingId) {
-        await homeStudyService.update(editingId, dataToSave);
-        toast.success(dataToSave.isCompleted ? '🔒 Assessment Completed & Locked!' : '✅ Assessment Updated Successfully!');
-      } else {
-        await homeStudyService.create(dataToSave);
-        localStorage.setItem('note_submitted', 'true');
-        toast.success(dataToSave.isCompleted ? '🔒 New Assessment Saved & Locked!' : '✅ New Assessment Saved Successfully!');
-      }
-      handleCancel();
-      await loadList();
-    } catch (error) {
-      console.error(error);
-      toast.error('❌ Failed to save data offline.');
-    }
-  };
-
+ 
   const handleHardRefresh = () => {
     setIsRefreshing(true);
     toast.loading('Refreshing...', { id: 'refresh' });
@@ -375,106 +351,132 @@ const FcHomeStudyAssessment: React.FC = () => {
     }
   };
 
-  // 📤 একক রেকর্ড Push - FamilyName ও FirstName দিয়ে
-  const handlePushSingleData = async (item: HomeStudyAssessmentData, e: React.MouseEvent) => {
-    e.stopPropagation();
-    
-    const online = await checkHomeStudyAPIHealth();
-    if (!online) {
-      toast.error('🔴 No internet connection. Please check your network.');
-      return;
-    }
+// 📤 একক রেকর্ড Push - FamilyName, CaregiverFirstName, CaregiverLastName দিয়ে
+const handlePushSingleData = async (item: HomeStudyAssessmentData, e: React.MouseEvent) => {
+  e.stopPropagation();
+  
+  const online = await checkHomeStudyAPIHealth();
+  if (!online) {
+    toast.error('🔴 No internet connection. Please check your network.');
+    return;
+  }
 
-    if (!item.familyName || !item.firstName) {
-      toast.error('❌ Family Name and First Name are required to sync!');
-      return;
-    }
+  if (!item.familyName || !item.caregiverFirstName || !item.caregiverLastName) {
+    toast.error('❌ Family Name, Caregiver First Name and Last Name are required to sync!');
+    return;
+  }
 
-    setPushingIds(prev => new Set(prev).add(item.id || 0));
-    const toastId = toast.loading(`Syncing: ${item.familyName}, ${item.firstName}...`);
+  setPushingIds(prev => new Set(prev).add(item.id || 0));
+  const toastId = toast.loading(`Syncing: ${item.caregiverFirstName} ${item.caregiverLastName}...`);
+  
+  try {
+    const result = await syncHomeStudy(item.familyName, item.caregiverFirstName, item.caregiverLastName, item);
     
-    try {
-      const result = await syncHomeStudy(item.familyName, item.firstName, item);
+    if (result.success) {
+      toast.success(`✅ ${item.caregiverFirstName} ${item.caregiverLastName} synced successfully!`, { id: toastId });
+      console.log('✅ Push Result:', result.data);
       
-      if (result.success) {
-        toast.success(`✅ ${item.firstName} ${item.familyName} synced successfully!`, { id: toastId });
-        console.log('✅ Push Result:', result.data);
-        
-        setPushModalData({
-          title: `${item.firstName} ${item.familyName} Synced`,
-          message: 'The home study assessment has been successfully pushed to the server.',
-          details: 'Your data is now securely stored in the cloud.',
-          syncedId: result.syncedId,
-          caseNumber: undefined,
-          isBulk: false,
-          totalSynced: 0,
-          totalRecords: 0,
-          failedCount: 0,
-        });
-        setShowPushModal(true);
-      } else {
-        toast.error(`❌ Failed to sync ${item.firstName} ${item.familyName}: ${result.message}`, { id: toastId });
-      }
-    } catch (error) {
-      console.error('Error pushing data:', error);
-      toast.error(`❌ Failed to sync ${item.firstName} ${item.familyName}`, { id: toastId });
-    } finally {
-      setPushingIds(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(item.id || 0);
-        return newSet;
+      setPushModalData({
+        title: `${item.caregiverFirstName} ${item.caregiverLastName} Synced`,
+        message: 'The home study assessment has been successfully pushed to the server.',
+        details: `Family: ${item.familyName}`,
+        syncedId: result.syncedId,
+        caseNumber: undefined,
+        isBulk: false,
+        totalSynced: 0,
+        totalRecords: 0,
+        failedCount: 0,
       });
+      setShowPushModal(true);
+    } else {
+      toast.error(`❌ Failed to sync ${item.caregiverFirstName} ${item.caregiverLastName}: ${result.message}`, { id: toastId });
     }
-  };
+  } catch (error) {
+    console.error('Error pushing data:', error);
+    toast.error(`❌ Failed to sync ${item.caregiverFirstName} ${item.caregiverLastName}`, { id: toastId });
+  } finally {
+    setPushingIds(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(item.id || 0);
+      return newSet;
+    });
+  }
+};
 
-  // 📤 সব রেকর্ড Push
-  const handlePushAllData = async () => {
-    if (assessmentsList.length === 0) {
-      toast.error('⚠️ No offline data available to push.');
-      return;
-    }
+// 📤 সব রেকর্ড Push
+const handlePushAllData = async () => {
+  if (assessmentsList.length === 0) {
+    toast.error('⚠️ No offline data available to push.');
+    return;
+  }
+  
+  const online = await checkHomeStudyAPIHealth();
+  if (!online) {
+    toast.error('🔴 No internet connection. Please check your network.');
+    return;
+  }
+  
+  setIsPushingAll(true);
+  const toastId = toast.loading(`Syncing total ${assessmentsList.length} records...`);
+  
+  try {
+    const result = await syncMultipleHomeStudies(assessmentsList);
     
-    const online = await checkHomeStudyAPIHealth();
-    if (!online) {
-      toast.error('🔴 No internet connection. Please check your network.');
-      return;
-    }
-    
-    setIsPushingAll(true);
-    const toastId = toast.loading(`Syncing total ${assessmentsList.length} records...`);
-    
-    try {
-      const result = await syncMultipleHomeStudies(assessmentsList);
+    if (result.success) {
+      toast.success(`✅ All ${result.totalSynced} records synced successfully!`, { id: toastId });
+      console.log('✅ Bulk Push Results:', result.results);
       
-      if (result.success) {
-        toast.success(`✅ All ${result.totalSynced} records synced successfully!`, { id: toastId });
-        console.log('✅ Bulk Push Results:', result.results);
-        
-        const failedResults = result.results.filter(r => !r.success);
-        setPushModalData({
-          title: 'Bulk Sync Complete',
-          message: `All ${result.totalSynced} records have been synced successfully.`,
-          details: 'All your assessment data is now securely stored in the cloud.',
-          syncedId: undefined,
-          caseNumber: undefined,
-          isBulk: true,
-          totalSynced: result.totalSynced,
-          totalRecords: assessmentsList.length,
-          failedCount: failedResults.length,
-        });
-        setShowPushModal(true);
-      } else {
-        const failedCount = result.results.filter(r => !r.success).length;
-        toast.error(`❌ ${failedCount} out of ${result.results.length} records failed to sync`, { id: toastId });
-      }
-    } catch (error) {
-      console.error('Error pushing all data:', error);
-      toast.error('❌ Failed to sync all records', { id: toastId });
-    } finally {
-      setIsPushingAll(false);
+      const failedResults = result.results.filter(r => !r.success);
+      setPushModalData({
+        title: 'Bulk Sync Complete',
+        message: `All ${result.totalSynced} records have been synced successfully.`,
+        details: 'All your assessment data is now securely stored in the cloud.',
+        syncedId: undefined,
+        caseNumber: undefined,
+        isBulk: true,
+        totalSynced: result.totalSynced,
+        totalRecords: assessmentsList.length,
+        failedCount: failedResults.length,
+      });
+      setShowPushModal(true);
+    } else {
+      const failedCount = result.results.filter(r => !r.success).length;
+      toast.error(`❌ ${failedCount} out of ${result.results.length} records failed to sync`, { id: toastId });
     }
-  };
+  } catch (error) {
+    console.error('Error pushing all data:', error);
+    toast.error('❌ Failed to sync all records', { id: toastId });
+  } finally {
+    setIsPushingAll(false);
+  }
+};
 
+// handleSubmit আপডেট
+const handleSubmit = async (e?: React.FormEvent, updatedData?: HomeStudyAssessmentData) => {
+  if (e) e.preventDefault();
+  const dataToSave = updatedData || formData;
+
+  if (!dataToSave.familyName || !dataToSave.caregiverFirstName || !dataToSave.caregiverLastName) {
+    toast.error('❌ Family Name, Caregiver First Name and Last Name are required!');
+    return;
+  }
+
+  try {
+    if (editingId) {
+      await homeStudyService.update(editingId, dataToSave);
+      toast.success(dataToSave.isCompleted ? '🔒 Assessment Completed & Locked!' : '✅ Assessment Updated Successfully!');
+    } else {
+      await homeStudyService.create(dataToSave);
+      localStorage.setItem('note_submitted', 'true');
+      toast.success(dataToSave.isCompleted ? '🔒 New Assessment Saved & Locked!' : '✅ New Assessment Saved Successfully!');
+    }
+    handleCancel();
+    await loadList();
+  } catch (error) {
+    console.error(error);
+    toast.error('❌ Failed to save data offline.');
+  }
+};
   const handleClearAllData = async () => {
     if (window.confirm('⚠️ CRITICAL WARNING!\nThis will delete ALL home study assessment records from your device permanently. Are you absolutely sure?')) {
       toast.loading('Clearing all data...', { id: 'clear-all' });
@@ -660,11 +662,12 @@ const FcHomeStudyAssessment: React.FC = () => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50/70 border-b border-slate-200/60 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                    <th className="py-3 px-4 sm:px-5">Family Name</th>
-                    <th className="py-3 px-4 sm:px-5">First Name</th>
-                    <th className="py-3 px-4">Assessment Date & Time</th>
-                    <th className="py-3 px-4 text-center">Status</th>
-                    <th className="py-3 px-4 text-right sm:pr-5">Actions</th>
+                <th className="py-3 px-4 sm:px-5">Family Name</th>
+<th className="py-3 px-4 sm:px-5">Caregiver First Name</th>
+<th className="py-3 px-4 sm:px-5">Caregiver Last Name</th>
+<th className="py-3 px-4">Assessment Date & Time</th>
+<th className="py-3 px-4 text-center">Status</th>
+<th className="py-3 px-4 text-right sm:pr-5">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
@@ -673,19 +676,24 @@ const FcHomeStudyAssessment: React.FC = () => {
                     
                     return (
                       <tr key={item.id} className="hover:bg-slate-50/40 transition-all">
-                        <td className="py-3.5 px-4 sm:px-5 font-bold text-slate-900">
-                          <div className="flex items-center gap-2">
-                            <Users size={14} className="text-slate-400 shrink-0" />
-                            <span>{item.familyName || 'Not Specified'}</span>
-                          </div>
-                        </td>
-                        
-                        <td className="py-3.5 px-4 sm:px-5 font-bold text-slate-900">
-                          <div className="flex items-center gap-2">
-                            <UserRound size={14} className="text-slate-400 shrink-0" />
-                            <span>{item.firstName || 'Not Specified'}</span>
-                          </div>
-                        </td>
+                      <td className="py-3.5 px-4 sm:px-5 font-bold text-slate-900">
+  <div className="flex items-center gap-2">
+    <Users size={14} className="text-slate-400 shrink-0" />
+    <span>{item.familyName || 'Not Specified'}</span>
+  </div>
+</td>
+<td className="py-3.5 px-4 sm:px-5 font-bold text-slate-900">
+  <div className="flex items-center gap-2">
+    <UserRound size={14} className="text-slate-400 shrink-0" />
+    <span>{item.caregiverFirstName || 'Not Specified'}</span>
+  </div>
+</td>
+<td className="py-3.5 px-4 sm:px-5 font-bold text-slate-900">
+  <div className="flex items-center gap-2">
+    <User size={14} className="text-slate-400 shrink-0" />
+    <span>{item.caregiverLastName || 'Not Specified'}</span>
+  </div>
+</td>
 
                         <td className="py-3.5 px-4 text-xs text-slate-500 font-medium">
                           <div className="flex flex-col gap-0.5">
@@ -737,7 +745,7 @@ const FcHomeStudyAssessment: React.FC = () => {
 
                             <button
                               type="button"
-                              onClick={(e) => item.id && openDeleteModal(item.id, `${item.firstName} ${item.familyName}` || 'Record', e)}
+                              onClick={(e) => item.id && openDeleteModal(item.id, `${item.caregiverFirstName} ${item.caregiverLastName}` || 'Record', e)}
                               className="inline-flex items-center justify-center p-1 bg-white hover:bg-red-50 border border-slate-200 hover:border-red-200 text-slate-400 hover:text-red-600 rounded-lg shadow-3xs transition cursor-pointer"
                               title="Delete record"
                             >
@@ -764,102 +772,102 @@ const FcHomeStudyAssessment: React.FC = () => {
             </div>
           )}
 
-          {/* Basic Meta Fields - CaseNumber রিমুভ, FamilyName & FirstName যোগ */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-2xs grid grid-cols-1 md:grid-cols-4 gap-5">
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Calendar size={13} className="text-slate-400" /> Assessment Date *
-              </label>
-              <input 
-                type="date" 
-                value={formData.assessmentDate} 
-                onChange={(e) => updateField('assessmentDate', e.target.value)} 
-                disabled={isReadOnly} 
-                required
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white disabled:bg-slate-50 disabled:text-slate-400 focus:outline-none focus:border-blue-500 transition font-medium text-slate-700"
-              />
-            </div>
+    
+<div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-2xs grid grid-cols-1 md:grid-cols-4 gap-5">
+  <div>
+    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+      <Calendar size={13} className="text-slate-400" /> Assessment Date *
+    </label>
+    <input 
+      type="date" 
+      value={formData.assessmentDate} 
+      onChange={(e) => updateField('assessmentDate', e.target.value)} 
+      disabled={isReadOnly} 
+      required
+      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white disabled:bg-slate-50 disabled:text-slate-400 focus:outline-none focus:border-blue-500 transition font-medium text-slate-700"
+    />
+  </div>
 
-            <div className="relative">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Clock size={13} className="text-slate-400" /> Assessment Time *
-              </label>
-              <div 
-                onClick={() => !isReadOnly && setIsTimeDropdownOpen(!isTimeDropdownOpen)}
-                className={`w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white flex items-center justify-between font-medium text-slate-700 cursor-pointer ${isReadOnly ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : ''}`}
-              >
-                <span>{formData.assessmentTime}</span>
-                <ChevronDown size={14} className="text-slate-400" />
-              </div>
+  <div className="relative">
+    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+      <Clock size={13} className="text-slate-400" /> Assessment Time *
+    </label>
+    <div 
+      onClick={() => !isReadOnly && setIsTimeDropdownOpen(!isTimeDropdownOpen)}
+      className={`w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white flex items-center justify-between font-medium text-slate-700 cursor-pointer ${isReadOnly ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : ''}`}
+    >
+      <span>{formData.assessmentTime}</span>
+      <ChevronDown size={14} className="text-slate-400" />
+    </div>
 
-              {!isReadOnly && isTimeDropdownOpen && (
-                <div className="absolute z-30 w-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto p-1">
-                  {TIME_OPTIONS.map((option) => (
-                    <div
-                      key={option.value}
-                      onClick={() => {
-                        updateField('assessmentTime', option.value);
-                        setIsTimeDropdownOpen(false);
-                      }}
-                      className={`px-3 py-2 text-xs font-medium rounded-lg cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition ${formData.assessmentTime === option.value ? 'bg-blue-50 text-blue-600' : 'text-slate-700'}`}
-                    >
-                      {option.label}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Family Name Field */}
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Users size={13} className="text-slate-400" /> Family Name *
-              </label>
-              <input
-                type="text"
-                value={formData.familyName || ''}
-                onChange={(e) => updateField('familyName', e.target.value)}
-                disabled={isReadOnly}
-                required
-                placeholder="e.g. Smith"
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white disabled:bg-slate-50 disabled:text-slate-400 focus:outline-none focus:border-blue-500 transition font-medium text-slate-700"
-              />
-            </div>
-
-            {/* First Name Field */}
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <UserRound size={13} className="text-slate-400" /> First Name *
-              </label>
-              <input
-                type="text"
-                value={formData.firstName || ''}
-                onChange={(e) => updateField('firstName', e.target.value)}
-                disabled={isReadOnly}
-                required
-                placeholder="e.g. John"
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white disabled:bg-slate-50 disabled:text-slate-400 focus:outline-none focus:border-blue-500 transition font-medium text-slate-700"
-              />
-            </div>
+    {!isReadOnly && isTimeDropdownOpen && (
+      <div className="absolute z-30 w-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto p-1">
+        {TIME_OPTIONS.map((option) => (
+          <div
+            key={option.value}
+            onClick={() => {
+              updateField('assessmentTime', option.value);
+              setIsTimeDropdownOpen(false);
+            }}
+            className={`px-3 py-2 text-xs font-medium rounded-lg cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition ${formData.assessmentTime === option.value ? 'bg-blue-50 text-blue-600' : 'text-slate-700'}`}
+          >
+            {option.label}
           </div>
+        ))}
+      </div>
+    )}
+  </div>
 
-          {/* Caregiver Name - আলাদা সারিতে */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-2xs">
-            <div className="flex flex-col space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 flex items-center gap-2">
-                <User size={14} className="text-slate-400" /> Caregiver Name *
-              </label>
-              <input
-                type="text"
-                value={formData.caregiverName || ''}
-                onChange={(e) => updateField('caregiverName', e.target.value)}
-                disabled={isReadOnly}
-                required
-                placeholder="Enter Caregiver Name"
-                className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 text-sm font-medium transition disabled:bg-slate-50 text-slate-800"
-              />
-            </div>
-          </div>
+  {/* Family Name Field */}
+  <div>
+    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+      <Users size={13} className="text-slate-400" /> Family Name *
+    </label>
+    <input
+      type="text"
+      value={formData.familyName || ''}
+      onChange={(e) => updateField('familyName', e.target.value)}
+      disabled={isReadOnly}
+      required
+      placeholder="e.g. Smith"
+      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white disabled:bg-slate-50 disabled:text-slate-400 focus:outline-none focus:border-blue-500 transition font-medium text-slate-700"
+    />
+  </div>
+
+  {/* Caregiver First Name Field */}
+  <div>
+    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+      <UserRound size={13} className="text-slate-400" /> Caregiver First Name *
+    </label>
+    <input
+      type="text"
+      value={formData.caregiverFirstName || ''}
+      onChange={(e) => updateField('caregiverFirstName', e.target.value)}
+      disabled={isReadOnly}
+      required
+      placeholder="e.g. John"
+      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white disabled:bg-slate-50 disabled:text-slate-400 focus:outline-none focus:border-blue-500 transition font-medium text-slate-700"
+    />
+  </div>
+</div>
+
+{/* Caregiver Last Name - আলাদা সারিতে */}
+<div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-2xs">
+  <div className="flex flex-col space-y-1.5">
+    <label className="text-xs font-bold text-slate-700 flex items-center gap-2">
+      <User size={14} className="text-slate-400" /> Caregiver Last Name *
+    </label>
+    <input
+      type="text"
+      value={formData.caregiverLastName || ''}
+      onChange={(e) => updateField('caregiverLastName', e.target.value)}
+      disabled={isReadOnly}
+      required
+      placeholder="e.g. Doe"
+      className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 text-sm font-medium transition disabled:bg-slate-50 text-slate-800"
+    />
+  </div>
+</div>
 
           {/* Contacts Section */}
           <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-2xs space-y-4">

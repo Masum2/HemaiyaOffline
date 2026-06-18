@@ -9,7 +9,8 @@ export interface HomeStudyAssessmentData {
   directionsToHome: string;
   motivationForTakingChild: string;
 familyName: string;
-  firstName: string;
+caregiverFirstName: string;
+  caregiverLastName: string;
   // Family History
   bornAndRaised: string;
   parentsDetails: string;

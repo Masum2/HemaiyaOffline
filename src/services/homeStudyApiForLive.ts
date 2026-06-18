@@ -76,15 +76,17 @@ const buildHomeStudyPayload = (safeData: any) => {
     createdOn: safeData.createdOn || new Date().toISOString(),
     
     familyName: safeData.familyName || '',
-    firstName: safeData.firstName || ''
+    caregiverFirstName: safeData.caregiverFirstName || '',
+    caregiverLastName: safeData.caregiverLastName || ''
   };
 };
 
 // 🎭 Mock Sync Function
-const mockSyncHomeStudy = async (familyName: string, firstName: string, assessmentData: any): Promise<HomeStudySyncResponse> => {
+const mockSyncHomeStudy = async (familyName: string, caregiverFirstName: string, caregiverLastName: string, assessmentData: any): Promise<HomeStudySyncResponse> => {
   console.log('🎭 ===== MOCK HOME STUDY SYNC STARTED =====');
   console.log('📌 Family Name:', familyName);
-  console.log('📌 First Name:', firstName);
+  console.log('📌 Caregiver First Name:', caregiverFirstName);
+  console.log('📌 Caregiver Last Name:', caregiverLastName);
   console.log('📦 Assessment Data:', assessmentData);
   
   const payload = buildHomeStudyPayload(assessmentData);
@@ -128,23 +130,25 @@ export const checkHomeStudyAPIHealth = async (): Promise<boolean> => {
   }
 };
 
-// 📤 Main Sync Function - FamilyName ও FirstName দিয়ে
-export const syncHomeStudy = async (familyName: string, firstName: string, assessmentData: any): Promise<HomeStudySyncResponse> => {
+// 📤 Main Sync Function - URL: /sync/familyName/caregiverFirstName/caregiverLastName
+export const syncHomeStudy = async (familyName: string, caregiverFirstName: string, caregiverLastName: string, assessmentData: any): Promise<HomeStudySyncResponse> => {
   if (USE_MOCK_MODE) {
-    return await mockSyncHomeStudy(familyName, firstName, assessmentData);
+    return await mockSyncHomeStudy(familyName, caregiverFirstName, caregiverLastName, assessmentData);
   }
   
   try {
     const safeData = assessmentData || {};
     const encodedFamilyName = encodeURIComponent(familyName || 'UNKNOWN');
-    const encodedFirstName = encodeURIComponent(firstName || 'UNKNOWN');
+    const encodedCaregiverFirstName = encodeURIComponent(caregiverFirstName || 'UNKNOWN');
+    const encodedCaregiverLastName = encodeURIComponent(caregiverLastName || 'UNKNOWN');
     
-    // 🔥 URL: http://localhost:5096/api/sync/familyName/firstName
-    const url = `${API_BASE_URL}/sync/${encodedFamilyName}/${encodedFirstName}`;
+    // 🔥 URL: http://localhost:5096/api/sync/familyName/caregiverFirstName/caregiverLastName
+    const url = `${API_BASE_URL}/sync/${encodedFamilyName}/${encodedCaregiverFirstName}/${encodedCaregiverLastName}`;
     
     console.log('🔄 Syncing home study assessment...');
     console.log('📌 Family Name:', familyName);
-    console.log('📌 First Name:', firstName);
+    console.log('📌 Caregiver First Name:', caregiverFirstName);
+    console.log('📌 Caregiver Last Name:', caregiverLastName);
     console.log('📡 API URL:', url);
     
     const payload = buildHomeStudyPayload(safeData);
@@ -197,9 +201,10 @@ export const syncMultipleHomeStudies = async (assessments: any[]): Promise<{
     for (let i = 0; i < assessments.length; i++) {
       const assessment = assessments[i];
       const familyName = assessment.familyName || '';
-      const firstName = assessment.firstName || '';
+      const caregiverFirstName = assessment.caregiverFirstName || '';
+      const caregiverLastName = assessment.caregiverLastName || '';
       
-      const result = await syncHomeStudy(familyName, firstName, assessment);
+      const result = await syncHomeStudy(familyName, caregiverFirstName, caregiverLastName, assessment);
       
       results.push({
         index: i,

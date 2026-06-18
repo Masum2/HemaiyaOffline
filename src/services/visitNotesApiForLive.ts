@@ -55,15 +55,17 @@ const buildVisitNotesPayload = (safeData: any) => {
     createdOn: safeData.createdOn || new Date().toISOString(),
     
     familyName: safeData.familyName || '',
-    firstName: safeData.firstName || ''
+    childrenFirstName: safeData.childrenFirstName || '',
+    childrenLastName: safeData.childrenLastName || ''
   };
 };
 
 // 🎭 Mock Sync Function
-const mockSyncVisitNotes = async (familyName: string, firstName: string, noteData: any): Promise<VisitNotesSyncResponse> => {
+const mockSyncVisitNotes = async (familyName: string, childrenFirstName: string, childrenLastName: string, noteData: any): Promise<VisitNotesSyncResponse> => {
   console.log('🎭 ===== MOCK VISIT NOTES SYNC STARTED =====');
   console.log('📌 Family Name:', familyName);
-  console.log('📌 First Name:', firstName);
+  console.log('📌 Children First Name:', childrenFirstName);
+  console.log('📌 Children Last Name:', childrenLastName);
   console.log('📦 Note Data:', noteData);
   
   const payload = buildVisitNotesPayload(noteData);
@@ -107,23 +109,25 @@ export const checkVisitNotesAPIHealth = async (): Promise<boolean> => {
   }
 };
 
-// 📤 Main Sync Function - URL: /sync/familyName/firstName
-export const syncVisitNotes = async (familyName: string, firstName: string, noteData: any): Promise<VisitNotesSyncResponse> => {
+// 📤 Main Sync Function - URL: /sync/familyName/childrenFirstName/childrenLastName
+export const syncVisitNotes = async (familyName: string, childrenFirstName: string, childrenLastName: string, noteData: any): Promise<VisitNotesSyncResponse> => {
   if (USE_MOCK_MODE) {
-    return await mockSyncVisitNotes(familyName, firstName, noteData);
+    return await mockSyncVisitNotes(familyName, childrenFirstName, childrenLastName, noteData);
   }
   
   try {
     const safeData = noteData || {};
     const encodedFamilyName = encodeURIComponent(familyName || 'UNKNOWN');
-    const encodedFirstName = encodeURIComponent(firstName || 'UNKNOWN');
+    const encodedChildrenFirstName = encodeURIComponent(childrenFirstName || 'UNKNOWN');
+    const encodedChildrenLastName = encodeURIComponent(childrenLastName || 'UNKNOWN');
     
-    // 🔥 URL: http://localhost:5096/api/sync/familyName/firstName
-    const url = `${API_BASE_URL}/sync/${encodedFamilyName}/${encodedFirstName}`;
+    // 🔥 URL: http://localhost:5096/api/sync/familyName/childrenFirstName/childrenLastName
+    const url = `${API_BASE_URL}/sync/${encodedFamilyName}/${encodedChildrenFirstName}/${encodedChildrenLastName}`;
     
     console.log('🔄 Syncing visit notes...');
     console.log('📌 Family Name:', familyName);
-    console.log('📌 First Name:', firstName);
+    console.log('📌 Children First Name:', childrenFirstName);
+    console.log('📌 Children Last Name:', childrenLastName);
     console.log('📡 API URL:', url);
     
     const payload = buildVisitNotesPayload(safeData);
@@ -176,9 +180,10 @@ export const syncMultipleVisitNotes = async (notes: any[]): Promise<{
     for (let i = 0; i < notes.length; i++) {
       const note = notes[i];
       const familyName = note.familyName || '';
-      const firstName = note.firstName || '';
+      const childrenFirstName = note.childrenFirstName || '';
+      const childrenLastName = note.childrenLastName || '';
       
-      const result = await syncVisitNotes(familyName, firstName, note);
+      const result = await syncVisitNotes(familyName, childrenFirstName, childrenLastName, note);
       
       results.push({
         index: i,

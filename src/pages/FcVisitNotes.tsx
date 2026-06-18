@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Clock, ShieldCheck, Check, Save, X, List, Plus, Edit2, 
-  Eye, Trash2, CloudLightning, ChevronDown, User, FileEdit, Hash, AlertCircle, 
+  Eye, Trash2, CloudLightning, ChevronDown, User, FileEdit, AlertCircle, 
   RefreshCw, Loader2, Users, UserRound
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
@@ -14,7 +14,35 @@ import {
 import type { VisitNotesData } from '../types/visitNotes';
 
 // ============================================
-// 🎉 PUSH SUCCESS MODAL COMPONENT
+// CONSTANTS
+// ============================================
+const APPOINTMENT_TYPES = [
+  'Email', 'Face to Face', 'letter', 'N/A', 
+  'Note to file', 'phone', 'Staffing', 'Text', 'Virtual'
+] as const;
+
+const CONCERNS_APPOINTMENTS_OPTIONS = [
+  'Dental',
+  'Health',
+  'Optical',
+  'Mental Health'
+] as const;
+
+const TIME_OPTIONS = (() => {
+  const times = [];
+  for (let i = 0; i < 24; i++) {
+    for (const min of [0, 30]) {
+      const hour = i % 12 || 12;
+      const ampm = i < 12 ? 'AM' : 'PM';
+      const minuteStr = min.toString().padStart(2, '0');
+      times.push({ value: `${hour}:${minuteStr} ${ampm}`, label: `${hour}:${minuteStr} ${ampm}` });
+    }
+  }
+  return times;
+})();
+
+// ============================================
+// PUSH SUCCESS MODAL
 // ============================================
 interface PushSuccessModalProps {
   isOpen: boolean;
@@ -144,7 +172,7 @@ const PushSuccessModal: React.FC<PushSuccessModalProps> = ({
 };
 
 // ============================================
-// 🗑️ DELETE CONFIRMATION MODAL COMPONENT
+// DELETE CONFIRMATION MODAL
 // ============================================
 interface DeleteConfirmationModalProps {
   isOpen: boolean;
@@ -225,58 +253,9 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
   );
 };
 
-const APPOINTMENT_TYPES = [
-  'Email', 'Face to Face', 'letter', 'N/A', 
-  'Note to file', 'phone', 'Staffing', 'Text', 'Virtual'
-] as const;
-
-const TIME_OPTIONS = (() => {
-  const times = [];
-  for (let i = 0; i < 24; i++) {
-    for (const min of [0, 30]) {
-      const hour = i % 12 || 12;
-      const ampm = i < 12 ? 'AM' : 'PM';
-      const minuteStr = min.toString().padStart(2, '0');
-      times.push({ value: `${hour}:${minuteStr} ${ampm}`, label: `${hour}:${minuteStr} ${ampm}` });
-    }
-  }
-  return times;
-})();
-
-// 👇 আপডেটেড INITIAL_FORM_STATE - CaseNumber রিমুভ, FamilyName ও FirstName যোগ
-const INITIAL_FORM_STATE: VisitNotesData = {
-  date: new Date().toISOString().split('T')[0],
-  time: '10:00 AM',
-  familyName: '',
-  firstName: '',
-  children: '',
-  concernsAppointments: '',
-  appointmentType: 'Face to Face',
-  babyProgramsGrowth: '',
-  schoolActivities: '',
-  independentLivingSkills: '',
-  purchasesForChild: '',
-  familyVisitsSummary: '',
-  childIssuesBehaviors: '',
-  safetyFireExtinguisher: false,
-  safetySmokeDetectors: false,
-  safetyCarbonDetector: false,
-  safetyEmergencyNumbers: false,
-  safetyFirstAidKit: false,
-  safetyTwoFormsOfExit: false,
-  safetyRunningHeatedWater: false,
-  safetyWillingRespiteHome: false,
-  childrenSleepLocation: '',
-  medicationsStorage: '',
-  cleanersStorage: '',
-  contactInfoUpToDate: '',
-  additionalComments: '',
-  fosterCareAssistantSignature: '',
-  isCompleted: false,
-  caseNumber: ''
-};
-
-// --- Form Sub-components ---
+// ============================================
+// FORM SUB-COMPONENTS
+// ============================================
 const FormSection = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-2xs space-y-4">
     <div className="text-blue-700 font-extrabold text-sm tracking-wider uppercase border-b border-slate-100 pb-2 mb-2">
@@ -308,6 +287,42 @@ const FormTextArea: React.FC<FormTextAreaProps> = ({ label, field, formData, isR
   </div>
 );
 
+// ============================================
+// MAIN COMPONENT
+// ============================================
+const INITIAL_FORM_STATE: VisitNotesData = {
+  date: new Date().toISOString().split('T')[0],
+  time: '10:00 AM',
+  familyName: '',
+  childrenFirstName: '',
+  childrenLastName: '',
+  concernsAppointments: '',
+  appointmentType: 'Face to Face',
+  babyProgramsGrowth: '',
+  schoolActivities: '',
+  independentLivingSkills: '',
+  purchasesForChild: '',
+  familyVisitsSummary: '',
+  childIssuesBehaviors: '',
+  safetyFireExtinguisher: false,
+  safetySmokeDetectors: false,
+  safetyCarbonDetector: false,
+  safetyEmergencyNumbers: false,
+  safetyFirstAidKit: false,
+  safetyTwoFormsOfExit: false,
+  safetyRunningHeatedWater: false,
+  safetyWillingRespiteHome: false,
+  childrenSleepLocation: '',
+  medicationsStorage: '',
+  cleanersStorage: '',
+  contactInfoUpToDate: '',
+  additionalComments: '',
+  fosterCareAssistantSignature: '',
+  isCompleted: false,
+  caseNumber: '',
+  firstName: ''
+};
+
 const FcVisitNotes: React.FC = () => {
   const [viewMode, setViewMode] = useState<'form' | 'list'>('list');
   const [notesList, setNotesList] = useState<VisitNotesData[]>([]);
@@ -316,12 +331,12 @@ const FcVisitNotes: React.FC = () => {
   
   const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false);
   const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState(false);
+  const [isConcernsDropdownOpen, setIsConcernsDropdownOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isPushingAll, setIsPushingAll] = useState<boolean>(false);
   const [pushingIds, setPushingIds] = useState<Set<number>>(new Set());
   const [isOnline, setIsOnline] = useState<boolean>(true);
   
-  // 🎉 Push Modal States
   const [showPushModal, setShowPushModal] = useState<boolean>(false);
   const [pushModalData, setPushModalData] = useState({
     title: '',
@@ -335,7 +350,6 @@ const FcVisitNotes: React.FC = () => {
     failedCount: 0,
   });
 
-  // 🗑️ Delete Modal States
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   const [deleteItemId, setDeleteItemId] = useState<number | null>(null);
   const [deleteItemName, setDeleteItemName] = useState<string>('');
@@ -374,8 +388,8 @@ const FcVisitNotes: React.FC = () => {
     if (e) e.preventDefault();
     const dataToSave = updatedData || formData;
 
-    if (!dataToSave.familyName || !dataToSave.firstName) {
-      toast.error('❌ Family Name and First Name are required!');
+    if (!dataToSave.familyName || !dataToSave.childrenFirstName || !dataToSave.childrenLastName) {
+      toast.error('❌ Family Name, Children First Name and Last Name are required!');
       return;
     }
 
@@ -414,7 +428,6 @@ const FcVisitNotes: React.FC = () => {
     }
   };
 
-  // 🗑️ Delete Handlers
   const openDeleteModal = (id: number, name: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setDeleteItemId(id);
@@ -449,108 +462,103 @@ const FcVisitNotes: React.FC = () => {
     }
   };
 
-// FcVisitNotes.tsx - Push ফাংশন (একই)
-
-// 📤 একক রেকর্ড Push
-const handlePushSingleData = async (item: VisitNotesData, e: React.MouseEvent) => {
-  e.stopPropagation();
-  
-  const online = await checkVisitNotesAPIHealth();
-  if (!online) {
-    toast.error('🔴 No internet connection. Please check your network.');
-    return;
-  }
-
-  if (!item.familyName || !item.firstName) {
-    toast.error('❌ Family Name and First Name are required to sync!');
-    return;
-  }
-
-  setPushingIds(prev => new Set(prev).add(item.id || 0));
-  const toastId = toast.loading(`Syncing: ${item.familyName}, ${item.firstName}...`);
-  
-  try {
-    // 🔥 Live API Call - URL: /sync/familyName/firstName
-    const result = await syncVisitNotes(item.familyName, item.firstName, item);
+  const handlePushSingleData = async (item: VisitNotesData, e: React.MouseEvent) => {
+    e.stopPropagation();
     
-    if (result.success) {
-      toast.success(`✅ ${item.firstName} ${item.familyName} synced successfully!`, { id: toastId });
-      console.log('✅ Push Result:', result.data);
-      
-      setPushModalData({
-        title: `${item.firstName} ${item.familyName} Synced`,
-        message: 'The visit note has been successfully pushed to the server.',
-        details: 'Your data is now securely stored in the cloud.',
-        syncedId: result.syncedId,
-        caseNumber: undefined,
-        isBulk: false,
-        totalSynced: 0,
-        totalRecords: 0,
-        failedCount: 0,
-      });
-      setShowPushModal(true);
-    } else {
-      toast.error(`❌ Failed to sync ${item.firstName} ${item.familyName}: ${result.message}`, { id: toastId });
+    const online = await checkVisitNotesAPIHealth();
+    if (!online) {
+      toast.error('🔴 No internet connection. Please check your network.');
+      return;
     }
-  } catch (error) {
-    console.error('Error pushing data:', error);
-    toast.error(`❌ Failed to sync ${item.firstName} ${item.familyName}`, { id: toastId });
-  } finally {
-    setPushingIds(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(item.id || 0);
-      return newSet;
-    });
-  }
-};
 
-// 📤 সব রেকর্ড Push
-const handlePushAllData = async () => {
-  if (notesList.length === 0) {
-    toast.error('⚠️ No offline data available to push.');
-    return;
-  }
-  
-  const online = await checkVisitNotesAPIHealth();
-  if (!online) {
-    toast.error('🔴 No internet connection. Please check your network.');
-    return;
-  }
-  
-  setIsPushingAll(true);
-  const toastId = toast.loading(`Syncing total ${notesList.length} records...`);
-  
-  try {
-    const result = await syncMultipleVisitNotes(notesList);
-    
-    if (result.success) {
-      toast.success(`✅ All ${result.totalSynced} records synced successfully!`, { id: toastId });
-      console.log('✅ Bulk Push Results:', result.results);
-      
-      const failedResults = result.results.filter(r => !r.success);
-      setPushModalData({
-        title: 'Bulk Sync Complete',
-        message: `All ${result.totalSynced} records have been synced successfully.`,
-        details: 'All your visit notes are now securely stored in the cloud.',
-        syncedId: undefined,
-        caseNumber: undefined,
-        isBulk: true,
-        totalSynced: result.totalSynced,
-        totalRecords: notesList.length,
-        failedCount: failedResults.length,
-      });
-      setShowPushModal(true);
-    } else {
-      const failedCount = result.results.filter(r => !r.success).length;
-      toast.error(`❌ ${failedCount} out of ${result.results.length} records failed to sync`, { id: toastId });
+    if (!item.familyName || !item.childrenFirstName || !item.childrenLastName) {
+      toast.error('❌ Family Name, Children First Name and Last Name are required to sync!');
+      return;
     }
-  } catch (error) {
-    console.error('Error pushing all data:', error);
-    toast.error('❌ Failed to sync all records', { id: toastId });
-  } finally {
-    setIsPushingAll(false);
-  }
-};
+
+    setPushingIds(prev => new Set(prev).add(item.id || 0));
+    const toastId = toast.loading(`Syncing: ${item.childrenFirstName} ${item.childrenLastName}...`);
+    
+    try {
+      const result = await syncVisitNotes(item.familyName, item.childrenFirstName, item.childrenLastName, item);
+      
+      if (result.success) {
+        toast.success(`✅ ${item.childrenFirstName} ${item.childrenLastName} synced successfully!`, { id: toastId });
+        console.log('✅ Push Result:', result.data);
+        
+        setPushModalData({
+          title: `${item.childrenFirstName} ${item.childrenLastName} Synced`,
+          message: 'The visit note has been successfully pushed to the server.',
+          details: `Family: ${item.familyName}`,
+          syncedId: result.syncedId,
+          caseNumber: undefined,
+          isBulk: false,
+          totalSynced: 0,
+          totalRecords: 0,
+          failedCount: 0,
+        });
+        setShowPushModal(true);
+      } else {
+        toast.error(`❌ Failed to sync ${item.childrenFirstName} ${item.childrenLastName}: ${result.message}`, { id: toastId });
+      }
+    } catch (error) {
+      console.error('Error pushing data:', error);
+      toast.error(`❌ Failed to sync ${item.childrenFirstName} ${item.childrenLastName}`, { id: toastId });
+    } finally {
+      setPushingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(item.id || 0);
+        return newSet;
+      });
+    }
+  };
+
+  const handlePushAllData = async () => {
+    if (notesList.length === 0) {
+      toast.error('⚠️ No offline data available to push.');
+      return;
+    }
+    
+    const online = await checkVisitNotesAPIHealth();
+    if (!online) {
+      toast.error('🔴 No internet connection. Please check your network.');
+      return;
+    }
+    
+    setIsPushingAll(true);
+    const toastId = toast.loading(`Syncing total ${notesList.length} records...`);
+    
+    try {
+      const result = await syncMultipleVisitNotes(notesList);
+      
+      if (result.success) {
+        toast.success(`✅ All ${result.totalSynced} records synced successfully!`, { id: toastId });
+        console.log('✅ Bulk Push Results:', result.results);
+        
+        const failedResults = result.results.filter(r => !r.success);
+        setPushModalData({
+          title: 'Bulk Sync Complete',
+          message: `All ${result.totalSynced} records have been synced successfully.`,
+          details: 'All your visit notes are now securely stored in the cloud.',
+          syncedId: undefined,
+          caseNumber: undefined,
+          isBulk: true,
+          totalSynced: result.totalSynced,
+          totalRecords: notesList.length,
+          failedCount: failedResults.length,
+        });
+        setShowPushModal(true);
+      } else {
+        const failedCount = result.results.filter(r => !r.success).length;
+        toast.error(`❌ ${failedCount} out of ${result.results.length} records failed to sync`, { id: toastId });
+      }
+    } catch (error) {
+      console.error('Error pushing all data:', error);
+      toast.error('❌ Failed to sync all records', { id: toastId });
+    } finally {
+      setIsPushingAll(false);
+    }
+  };
 
   const handleClearAllData = async () => {
     if (window.confirm('⚠️ CRITICAL WARNING!\nThis will delete ALL visit notes from IndexedDB. Are you sure?')) {
@@ -583,6 +591,7 @@ const handlePushAllData = async () => {
     setViewMode('list');
     setIsTimeDropdownOpen(false);
     setIsTypeDropdownOpen(false);
+    setIsConcernsDropdownOpen(false);
   };
 
   const isReadOnly = formData.isCompleted;
@@ -656,7 +665,6 @@ const handlePushAllData = async () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
-          
           <span className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border ${
             isOnline ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'
           }`}>
@@ -718,7 +726,7 @@ const handlePushAllData = async () => {
         </div>
       </div>
 
-      {/* TABLE VIEW - আপডেটেড কলাম */}
+      {/* TABLE VIEW */}
       {viewMode === 'list' && (
         <div className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs overflow-hidden w-full">
           <div className="p-4 bg-slate-50/70 border-b border-slate-200/60 font-bold text-xs text-slate-500 uppercase tracking-wider">
@@ -730,15 +738,16 @@ const handlePushAllData = async () => {
             </div>
           ) : (
             <div className="w-full overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[1100px] lg:min-w-full table-auto">
+              <table className="w-full text-left border-collapse min-w-[1200px] lg:min-w-full table-auto">
                 <thead>
                   <tr className="bg-slate-50/70 border-b border-slate-200/60 text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
-                    <th className="py-4 px-5 w-[15%] min-w-[140px]">Family Name</th>
-                    <th className="py-4 px-5 w-[15%] min-w-[140px]">First Name</th>
-                    <th className="py-4 px-4 w-[25%] min-w-[220px]">Concerns / Appointments</th>
-                    <th className="py-4 px-4 w-[15%] min-w-[150px]">Appointment Type</th>
-                    <th className="py-4 px-4 w-[13%] min-w-[130px]">Date & Time</th>
-                    <th className="py-4 px-4 text-center w-[12%] min-w-[100px]">Status</th>
+                    <th className="py-4 px-5 w-[12%] min-w-[120px]">Family Name</th>
+                    <th className="py-4 px-5 w-[14%] min-w-[140px]">Children First Name</th>
+                    <th className="py-4 px-5 w-[14%] min-w-[140px]">Children Last Name</th>
+                    <th className="py-4 px-4 w-[18%] min-w-[160px]">Concerns / Appointments</th>
+                    <th className="py-4 px-4 w-[12%] min-w-[120px]">Appointment Type</th>
+                    <th className="py-4 px-4 w-[12%] min-w-[130px]">Date & Time</th>
+                    <th className="py-4 px-4 text-center w-[8%] min-w-[80px]">Status</th>
                     <th className="py-4 px-5 text-right w-[140px] min-w-[140px]">Actions</th>
                   </tr>
                 </thead>
@@ -758,25 +767,29 @@ const handlePushAllData = async () => {
                         <td className="py-3.5 px-5 font-bold text-slate-900">
                           <div className="flex items-center gap-2">
                             <UserRound size={14} className="text-slate-400 shrink-0" />
-                            <span>{item.firstName || 'Not Specified'}</span>
+                            <span>{item.childrenFirstName || 'Not Specified'}</span>
+                          </div>
+                        </td>
+
+                        <td className="py-3.5 px-5 font-bold text-slate-900">
+                          <div className="flex items-center gap-2">
+                            <User size={14} className="text-slate-400 shrink-0" />
+                            <span>{item.childrenLastName || 'Not Specified'}</span>
                           </div>
                         </td>
 
                         <td className="py-3.5 px-4 text-slate-600 font-medium">
                           {item.concernsAppointments ? (
-                            <div className="flex items-center gap-1.5" title={item.concernsAppointments}>
-                              <AlertCircle size={13} className="text-amber-500 shrink-0" />
-                              <span className="block break-words line-clamp-2 text-xs sm:text-sm">
-                                {item.concernsAppointments}
-                              </span>
-                            </div>
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                              {item.concernsAppointments}
+                            </span>
                           ) : (
-                            <span className="text-slate-400 text-xs italic">No concerns listed</span>
+                            <span className="text-slate-400 text-xs italic">Not selected</span>
                           )}
                         </td>
 
                         <td className="py-3.5 px-4 whitespace-nowrap">
-                          <span className="inline-flex items-center px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md text-xs font-medium border border-blue-100">
+                          <span className="inline-flex items-center px-2 py-0.5 bg-purple-50 text-purple-700 rounded-md text-xs font-medium border border-purple-100">
                             {item.appointmentType}
                           </span>
                         </td>
@@ -829,7 +842,7 @@ const handlePushAllData = async () => {
 
                             <button
                               type="button"
-                              onClick={(e) => item.id && openDeleteModal(item.id, `${item.firstName} ${item.familyName}` || 'Record', e)}
+                              onClick={(e) => item.id && openDeleteModal(item.id, `${item.childrenFirstName} ${item.childrenLastName}` || 'Record', e)}
                               className="inline-flex items-center p-1 bg-white border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-300 rounded-lg shadow-3xs transition cursor-pointer"
                             >
                               <Trash2 size={12} />
@@ -846,7 +859,7 @@ const handlePushAllData = async () => {
         </div>
       )}
 
-      {/* FORM VIEW - আপডেটেড ফর্ম */}
+      {/* FORM VIEW */}
       {viewMode === 'form' && (
         <form onSubmit={(e) => handleSubmit(e)} className="bg-slate-50/60 rounded-2xl p-2 sm:p-4 space-y-6">
           {isReadOnly && (
@@ -855,7 +868,7 @@ const handlePushAllData = async () => {
             </div>
           )}
 
-          {/* Core Master Meta Parameters - CaseNumber রিমুভ, FamilyName ও FirstName যোগ */}
+          {/* Core Master Meta Parameters */}
           <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-2xs grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-5">
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -901,7 +914,6 @@ const handlePushAllData = async () => {
               )}
             </div>
 
-            {/* Family Name Field */}
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                 <Users size={13} className="text-slate-400" /> Family Name *
@@ -917,15 +929,14 @@ const handlePushAllData = async () => {
               />
             </div>
 
-            {/* First Name Field */}
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <UserRound size={13} className="text-slate-400" /> First Name *
+                <UserRound size={13} className="text-slate-400" /> Children First Name *
               </label>
               <input
                 type="text"
-                value={formData.firstName || ''}
-                onChange={(e) => updateField('firstName', e.target.value)}
+                value={formData.childrenFirstName || ''}
+                onChange={(e) => updateField('childrenFirstName', e.target.value)}
                 disabled={isReadOnly}
                 required
                 placeholder="e.g. John"
@@ -934,26 +945,28 @@ const handlePushAllData = async () => {
             </div>
           </div>
 
-          {/* Children Field - আলাদা সারিতে */}
+          {/* Children Last Name */}
           <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-2xs">
             <div className="flex flex-col space-y-1.5">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-2">
-                <User size={14} className="text-slate-400" /> Children
+                <User size={14} className="text-slate-400" /> Children Last Name *
               </label>
               <input
                 type="text"
-                value={formData.children || ''}
-                onChange={(e) => updateField('children', e.target.value)}
+                value={formData.childrenLastName || ''}
+                onChange={(e) => updateField('childrenLastName', e.target.value)}
                 disabled={isReadOnly}
-                placeholder="Enter children names"
+                required
+                placeholder="e.g. Doe"
                 className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 text-sm font-medium transition disabled:bg-slate-50 text-slate-800"
               />
             </div>
           </div>
 
-          {/* Appointment Type Dropdown */}
+          {/* ⭐ Appointment Type & Concerns/Appointments Dropdown */}
           <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-2xs">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Appointment Type Dropdown */}
               <div className="relative">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
                   Appointment Type
@@ -984,18 +997,35 @@ const handlePushAllData = async () => {
                 )}
               </div>
 
-              <div>
+              {/* ⭐ Concerns / Appointments Dropdown */}
+              <div className="relative">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                   <AlertCircle size={13} className="text-slate-400" /> Concerns / Appointments
                 </label>
-                <input
-                  type="text"
-                  value={formData.concernsAppointments || ''}
-                  onChange={(e) => updateField('concernsAppointments', e.target.value)}
-                  disabled={isReadOnly}
-                  placeholder="Enter concerns or appointment notes"
-                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white disabled:bg-slate-50 disabled:text-slate-400 focus:outline-none focus:border-blue-500 transition font-medium text-slate-700"
-                />
+                <div 
+                  onClick={() => !isReadOnly && setIsConcernsDropdownOpen(!isConcernsDropdownOpen)}
+                  className={`w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white flex items-center justify-between font-medium text-slate-700 cursor-pointer ${isReadOnly ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : ''}`}
+                >
+                  <span>{formData.concernsAppointments || 'Select Concerns/Appointments'}</span>
+                  <ChevronDown size={14} className="text-slate-400" />
+                </div>
+
+                {!isReadOnly && isConcernsDropdownOpen && (
+                  <div className="absolute z-30 w-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto p-1">
+                    {CONCERNS_APPOINTMENTS_OPTIONS.map((option) => (
+                      <div
+                        key={option}
+                        onClick={() => {
+                          updateField('concernsAppointments', option);
+                          setIsConcernsDropdownOpen(false);
+                        }}
+                        className={`px-3 py-2 text-xs font-medium rounded-lg cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition ${formData.concernsAppointments === option ? 'bg-blue-50 text-blue-600' : ''}`}
+                      >
+                        {option}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>
