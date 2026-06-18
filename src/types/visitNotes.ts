@@ -32,4 +32,6 @@ export interface VisitNotesData {
   isCompleted: boolean;
   createdAt?: string;
   updatedAt?: string;
+  familyName: string;
+  firstName: string;
 }

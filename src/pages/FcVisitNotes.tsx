@@ -2,14 +2,232 @@ import React, { useState, useEffect } from 'react';
 import { 
   Calendar, Clock, ShieldCheck, Check, Save, X, List, Plus, Edit2, 
   Eye, Trash2, CloudLightning, ChevronDown, User, FileEdit, Hash, AlertCircle, 
-  RefreshCw
+  RefreshCw, Loader2, Users, UserRound
 } from 'lucide-react';
+import toast, { Toaster } from 'react-hot-toast';
 import { visitNotesService } from '../services/visitNotesService';
+import { 
+  checkVisitNotesAPIHealth, 
+  syncVisitNotes, 
+  syncMultipleVisitNotes 
+} from '../services/visitNotesApiForLive';
 import type { VisitNotesData } from '../types/visitNotes';
+
+// ============================================
+// 🎉 PUSH SUCCESS MODAL COMPONENT
+// ============================================
+interface PushSuccessModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  message: string;
+  details?: string;
+  syncedId?: number;
+  caseNumber?: string;
+  isBulk?: boolean;
+  totalSynced?: number;
+  totalRecords?: number;
+  failedCount?: number;
+}
+
+const PushSuccessModal: React.FC<PushSuccessModalProps> = ({
+  isOpen,
+  onClose,
+  title,
+  message,
+  details,
+  syncedId,
+  caseNumber,
+  isBulk = false,
+  totalSynced = 0,
+  totalRecords = 0,
+  failedCount = 0
+}) => {
+  if (!isOpen) return null;
+
+  const hasErrors = failedCount && failedCount > 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+      <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
+      
+      <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-100 animate-in zoom-in-95 duration-150">
+        <div className={`px-6 py-4 ${hasErrors ? 'bg-gradient-to-r from-amber-50 to-white border-b border-amber-200' : 'bg-gradient-to-r from-emerald-50 to-white border-b border-emerald-200'}`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${hasErrors ? 'bg-amber-100' : 'bg-emerald-100'}`}>
+              {hasErrors ? (
+                <AlertCircle size={20} className="text-amber-600" />
+              ) : (
+                <Check size={20} className="text-emerald-600" />
+              )}
+            </div>
+            <div>
+              <h3 className={`text-base font-bold ${hasErrors ? 'text-amber-800' : 'text-emerald-800'}`}>
+                {hasErrors ? '⚠️ Partial Sync' : '🎉 Sync Successful!'}
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">{title}</p>
+            </div>
+          </div>
+          <button 
+            onClick={onClose} 
+            className="absolute top-4 right-4 p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          <div className="text-center">
+            <div className={`mx-auto w-14 h-14 rounded-full flex items-center justify-center mb-3 ${hasErrors ? 'bg-amber-50' : 'bg-emerald-50'}`}>
+              {hasErrors ? (
+                <AlertCircle size={28} className="text-amber-500" />
+              ) : (
+                <Check size={28} className="text-emerald-500" />
+              )}
+            </div>
+            <p className="text-sm text-slate-700 font-medium">{message}</p>
+            {details && (
+              <p className="text-xs text-slate-400 mt-1">{details}</p>
+            )}
+          </div>
+
+          {isBulk && (
+            <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <p className="text-2xl font-black text-blue-600">{totalRecords}</p>
+                  <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Total</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-black text-emerald-600">{totalSynced}</p>
+                  <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Synced</p>
+                </div>
+                <div>
+                  <p className={`text-2xl font-black ${failedCount && failedCount > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                    {failedCount && failedCount > 0 ? failedCount : 0}
+                  </p>
+                  <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Failed</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!isBulk && syncedId && (
+            <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500 font-medium">Synced ID:</span>
+                <span className="font-bold text-slate-800">#{syncedId}</span>
+              </div>
+              {caseNumber && (
+                <div className="flex items-center justify-between text-xs mt-1">
+                  <span className="text-slate-500 font-medium">Case Number:</span>
+                  <span className="font-bold text-slate-800">{caseNumber}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          <button
+            onClick={onClose}
+            className={`w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all active:scale-95 shadow-md ${
+              hasErrors 
+                ? 'bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800'
+                : 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700'
+            }`}
+          >
+            {hasErrors ? 'Got it' : 'Awesome! 👏'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============================================
+// 🗑️ DELETE CONFIRMATION MODAL COMPONENT
+// ============================================
+interface DeleteConfirmationModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  itemName: string;
+  isDeleting: boolean;
+}
+
+const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  itemName,
+  isDeleting
+}) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+      <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
+      
+      <div className="relative bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden transform transition-all scale-100 animate-in zoom-in-95 duration-150">
+        <div className="px-6 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+              <Trash2 size={20} className="text-red-600" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900">Delete Record</h3>
+          </div>
+          <button 
+            onClick={onClose} 
+            className="absolute top-4 right-4 p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+            disabled={isDeleting}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          <p className="text-sm text-slate-600">
+            Are you sure you want to delete <span className="font-semibold text-slate-900">"{itemName}"</span>?
+          </p>
+          <p className="text-xs text-slate-400">This action cannot be undone.</p>
+
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isDeleting}
+              className="w-1/2 py-2.5 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-all active:scale-95 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={isDeleting}
+              className={`w-1/2 py-2.5 rounded-xl text-sm font-semibold text-white transition-all active:scale-95 shadow-md ${
+                isDeleting 
+                  ? 'bg-slate-400 cursor-not-allowed' 
+                  : 'bg-red-600 hover:bg-red-700'
+              }`}
+            >
+              {isDeleting ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 size={16} className="animate-spin" />
+                  Deleting...
+                </span>
+              ) : (
+                'Delete'
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const APPOINTMENT_TYPES = [
   'Email', 'Face to Face', 'letter', 'N/A', 
-  'Note to file', 'phone', 'Stuffing', 'Text', 'Virtual'
+  'Note to file', 'phone', 'Staffing', 'Text', 'Virtual'
 ] as const;
 
 const TIME_OPTIONS = (() => {
@@ -25,10 +243,12 @@ const TIME_OPTIONS = (() => {
   return times;
 })();
 
+// 👇 আপডেটেড INITIAL_FORM_STATE - CaseNumber রিমুভ, FamilyName ও FirstName যোগ
 const INITIAL_FORM_STATE: VisitNotesData = {
   date: new Date().toISOString().split('T')[0],
   time: '10:00 AM',
-  caseNumber: '',
+  familyName: '',
+  firstName: '',
   children: '',
   concernsAppointments: '',
   appointmentType: 'Face to Face',
@@ -53,9 +273,10 @@ const INITIAL_FORM_STATE: VisitNotesData = {
   additionalComments: '',
   fosterCareAssistantSignature: '',
   isCompleted: false,
+  caseNumber: ''
 };
 
-// --- Form Sub-components for Reusability ---
+// --- Form Sub-components ---
 const FormSection = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-2xs space-y-4">
     <div className="text-blue-700 font-extrabold text-sm tracking-wider uppercase border-b border-slate-100 pb-2 mb-2">
@@ -96,13 +317,52 @@ const FcVisitNotes: React.FC = () => {
   const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false);
   const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isPushingAll, setIsPushingAll] = useState<boolean>(false);
+  const [pushingIds, setPushingIds] = useState<Set<number>>(new Set());
+  const [isOnline, setIsOnline] = useState<boolean>(true);
+  
+  // 🎉 Push Modal States
+  const [showPushModal, setShowPushModal] = useState<boolean>(false);
+  const [pushModalData, setPushModalData] = useState({
+    title: '',
+    message: '',
+    details: '',
+    syncedId: undefined as number | undefined,
+    caseNumber: undefined as string | undefined,
+    isBulk: false,
+    totalSynced: 0,
+    totalRecords: 0,
+    failedCount: 0,
+  });
+
+  // 🗑️ Delete Modal States
+  const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
+  const [deleteItemId, setDeleteItemId] = useState<number | null>(null);
+  const [deleteItemName, setDeleteItemName] = useState<string>('');
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
   const loadList = async () => {
-    const list = await visitNotesService.getAll();
-    setNotesList(list);
+    try {
+      const list = await visitNotesService.getAll();
+      setNotesList(list);
+      
+      const online = await checkVisitNotesAPIHealth();
+      setIsOnline(online);
+    } catch (error) {
+      console.error('Error loading list:', error);
+      toast.error('Failed to load visit notes');
+    }
   };
 
   useEffect(() => {
     loadList();
+    
+    const interval = setInterval(async () => {
+      const online = await checkVisitNotesAPIHealth();
+      setIsOnline(online);
+    }, 30000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const updateField = (name: keyof VisitNotesData, value: any) => {
@@ -114,32 +374,36 @@ const FcVisitNotes: React.FC = () => {
     if (e) e.preventDefault();
     const dataToSave = updatedData || formData;
 
-    if (!dataToSave.children) {
-      alert('❌ Children field is required!');
+    if (!dataToSave.familyName || !dataToSave.firstName) {
+      toast.error('❌ Family Name and First Name are required!');
       return;
     }
 
     try {
       if (editingId) {
         await visitNotesService.update(editingId, dataToSave);
-        alert(dataToSave.isCompleted ? '🔒 Visit Notes Completed & Locked!' : '✅ Visit Notes Updated in Offline Storage!');
+        toast.success(dataToSave.isCompleted ? '🔒 Visit Notes Completed & Locked!' : '✅ Visit Notes Updated Successfully!');
       } else {
         await visitNotesService.create(dataToSave);
-        alert(dataToSave.isCompleted ? '🔒 New Visit Notes Saved & Locked!' : '✅ New Visit Notes Saved Offline!');
+        toast.success(dataToSave.isCompleted ? '🔒 New Visit Notes Saved & Locked!' : '✅ New Visit Notes Saved Successfully!');
       }
       handleCancel();
       await loadList();
     } catch (error) {
       console.error(error);
-      alert('❌ Failed to save data to IndexedDB.');
+      toast.error('❌ Failed to save data offline.');
     }
   };
+
   const handleHardRefresh = () => {
     setIsRefreshing(true);
+    toast.loading('Refreshing...', { id: 'refresh' });
     setTimeout(() => {
-      window.location.reload(); // এটি উইন্ডোজের ইলেকট্রন মেমরি পাইপলাইন ক্লিন করে দেবে
+      toast.success('Refreshed successfully!', { id: 'refresh' });
+      window.location.reload();
     }, 150);
   };
+
   const handleToggleComplete = async () => {
     if (formData.isCompleted) return;
 
@@ -150,33 +414,154 @@ const FcVisitNotes: React.FC = () => {
     }
   };
 
-  const handleDelete = async (id: number, e: React.MouseEvent) => {
+  // 🗑️ Delete Handlers
+  const openDeleteModal = (id: number, name: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm('Are you sure you want to delete this record from offline database?')) {
-      await visitNotesService.delete(id);
-      alert('🗑️ Record Deleted Successfully!');
+    setDeleteItemId(id);
+    setDeleteItemName(name || 'Record');
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteItemId) return;
+    
+    setIsDeleting(true);
+    try {
+      await visitNotesService.delete(deleteItemId);
+      toast.success('🗑️ Record Deleted Successfully!');
+      setShowDeleteModal(false);
       await loadList();
+    } catch (error) {
+      console.error(error);
+      toast.error('❌ Failed to delete record');
+    } finally {
+      setIsDeleting(false);
+      setDeleteItemId(null);
+      setDeleteItemName('');
     }
   };
 
-  const handlePushSingleData = async (item: VisitNotesData, e: React.MouseEvent) => {
-    e.stopPropagation();
-    alert(`⚡ Syncing Visit Notes for Case #${item.caseNumber || 'N/A'} to the server...`);
+  const closeDeleteModal = () => {
+    if (!isDeleting) {
+      setShowDeleteModal(false);
+      setDeleteItemId(null);
+      setDeleteItemName('');
+    }
   };
 
-  const handlePushAllData = () => {
-    if (notesList.length === 0) {
-      alert('⚠️ No offline data available to push.');
-      return;
+// FcVisitNotes.tsx - Push ফাংশন (একই)
+
+// 📤 একক রেকর্ড Push
+const handlePushSingleData = async (item: VisitNotesData, e: React.MouseEvent) => {
+  e.stopPropagation();
+  
+  const online = await checkVisitNotesAPIHealth();
+  if (!online) {
+    toast.error('🔴 No internet connection. Please check your network.');
+    return;
+  }
+
+  if (!item.familyName || !item.firstName) {
+    toast.error('❌ Family Name and First Name are required to sync!');
+    return;
+  }
+
+  setPushingIds(prev => new Set(prev).add(item.id || 0));
+  const toastId = toast.loading(`Syncing: ${item.familyName}, ${item.firstName}...`);
+  
+  try {
+    // 🔥 Live API Call - URL: /sync/familyName/firstName
+    const result = await syncVisitNotes(item.familyName, item.firstName, item);
+    
+    if (result.success) {
+      toast.success(`✅ ${item.firstName} ${item.familyName} synced successfully!`, { id: toastId });
+      console.log('✅ Push Result:', result.data);
+      
+      setPushModalData({
+        title: `${item.firstName} ${item.familyName} Synced`,
+        message: 'The visit note has been successfully pushed to the server.',
+        details: 'Your data is now securely stored in the cloud.',
+        syncedId: result.syncedId,
+        caseNumber: undefined,
+        isBulk: false,
+        totalSynced: 0,
+        totalRecords: 0,
+        failedCount: 0,
+      });
+      setShowPushModal(true);
+    } else {
+      toast.error(`❌ Failed to sync ${item.firstName} ${item.familyName}: ${result.message}`, { id: toastId });
     }
-    alert(`⚡ Syncing total ${notesList.length} records to the server...`);
-  };
+  } catch (error) {
+    console.error('Error pushing data:', error);
+    toast.error(`❌ Failed to sync ${item.firstName} ${item.familyName}`, { id: toastId });
+  } finally {
+    setPushingIds(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(item.id || 0);
+      return newSet;
+    });
+  }
+};
+
+// 📤 সব রেকর্ড Push
+const handlePushAllData = async () => {
+  if (notesList.length === 0) {
+    toast.error('⚠️ No offline data available to push.');
+    return;
+  }
+  
+  const online = await checkVisitNotesAPIHealth();
+  if (!online) {
+    toast.error('🔴 No internet connection. Please check your network.');
+    return;
+  }
+  
+  setIsPushingAll(true);
+  const toastId = toast.loading(`Syncing total ${notesList.length} records...`);
+  
+  try {
+    const result = await syncMultipleVisitNotes(notesList);
+    
+    if (result.success) {
+      toast.success(`✅ All ${result.totalSynced} records synced successfully!`, { id: toastId });
+      console.log('✅ Bulk Push Results:', result.results);
+      
+      const failedResults = result.results.filter(r => !r.success);
+      setPushModalData({
+        title: 'Bulk Sync Complete',
+        message: `All ${result.totalSynced} records have been synced successfully.`,
+        details: 'All your visit notes are now securely stored in the cloud.',
+        syncedId: undefined,
+        caseNumber: undefined,
+        isBulk: true,
+        totalSynced: result.totalSynced,
+        totalRecords: notesList.length,
+        failedCount: failedResults.length,
+      });
+      setShowPushModal(true);
+    } else {
+      const failedCount = result.results.filter(r => !r.success).length;
+      toast.error(`❌ ${failedCount} out of ${result.results.length} records failed to sync`, { id: toastId });
+    }
+  } catch (error) {
+    console.error('Error pushing all data:', error);
+    toast.error('❌ Failed to sync all records', { id: toastId });
+  } finally {
+    setIsPushingAll(false);
+  }
+};
 
   const handleClearAllData = async () => {
     if (window.confirm('⚠️ CRITICAL WARNING!\nThis will delete ALL visit notes from IndexedDB. Are you sure?')) {
-      await visitNotesService.clearAll();
-      alert('💥 All offline visit notes cleared.');
-      await loadList();
+      try {
+        await visitNotesService.clearAll();
+        toast.success('💥 All offline visit notes cleared.');
+        await loadList();
+      } catch (error) {
+        console.error(error);
+        toast.error('❌ Failed to clear data');
+      }
     }
   };
 
@@ -203,10 +588,60 @@ const FcVisitNotes: React.FC = () => {
   const isReadOnly = formData.isCompleted;
 
   return (
-    // কন্টেইনার উইডথ max-w-5xl থেকে বাড়িয়ে max-w-7xl করা হলো যাতে টেবিল ছড়াতে পারে
     <div className="max-w-7xl mx-auto space-y-6 text-slate-800 pb-16 antialiased p-4">
       
-      {/* Header Panel */}
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+            padding: '16px',
+            borderRadius: '12px',
+            fontSize: '14px',
+            fontWeight: '500',
+          },
+          success: {
+            duration: 3000,
+            iconTheme: {
+              primary: '#22c55e',
+              secondary: '#fff',
+            },
+          },
+          error: {
+            duration: 4000,
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#fff',
+            },
+          },
+        }}
+      />
+
+      <PushSuccessModal
+        isOpen={showPushModal}
+        onClose={() => setShowPushModal(false)}
+        title={pushModalData.title}
+        message={pushModalData.message}
+        details={pushModalData.details}
+        syncedId={pushModalData.syncedId}
+        caseNumber={pushModalData.caseNumber}
+        isBulk={pushModalData.isBulk}
+        totalSynced={pushModalData.totalSynced}
+        totalRecords={pushModalData.totalRecords}
+        failedCount={pushModalData.failedCount}
+      />
+
+      <DeleteConfirmationModal
+        isOpen={showDeleteModal}
+        onClose={closeDeleteModal}
+        onConfirm={confirmDelete}
+        itemName={deleteItemName}
+        isDeleting={isDeleting}
+      />
+
+      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200/80 pb-5 gap-4">
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
@@ -220,26 +655,36 @@ const FcVisitNotes: React.FC = () => {
           </div>
         </div>
 
-        {/* Global Action Triggers */}
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+          
+          <span className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border ${
+            isOnline ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+            {isOnline ? '🟢 Online' : '🔴 Offline'}
+          </span>
+
           {viewMode === 'list' ? (
             <>
               <button
-            onClick={handleHardRefresh}
-            disabled={isRefreshing}
-            className="flex items-center gap-1.5 sm:gap-2 border border-slate-200 text-slate-600 hover:text-slate-800 bg-white hover:bg-slate-50 px-3 py-2 sm:px-3.5 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 shadow-2xs cursor-pointer disabled:opacity-50"
-            title="Force refresh database and memory cache"
-          >
-            <RefreshCw size={14} className={isRefreshing ? "animate-spin text-blue-600" : "opacity-90"} />
-            <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
-          </button>
+                onClick={handleHardRefresh}
+                disabled={isRefreshing}
+                className="flex items-center gap-1.5 sm:gap-2 border border-slate-200 text-slate-600 hover:text-slate-800 bg-white hover:bg-slate-50 px-3 py-2 sm:px-3.5 rounded-xl text-xs font-semibold transition-all duration-200 active:scale-95 shadow-2xs cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw size={14} className={isRefreshing ? "animate-spin text-blue-600" : "opacity-90"} />
+                <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handlePushAllData}
-                className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white px-3 py-2 rounded-xl text-xs font-semibold transition shadow-2xs cursor-pointer"
+                disabled={isPushingAll}
+                className={`flex items-center gap-1.5 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white px-3 py-2 rounded-xl text-xs font-semibold transition shadow-2xs cursor-pointer ${
+                  isPushingAll ? 'opacity-50 cursor-not-allowed' : ''
+                }`}
               >
-                <CloudLightning size={14} /> 
-                <span>Push All Data</span>
+                {isPushingAll ? <Loader2 size={14} className="animate-spin" /> : <CloudLightning size={14} />}
+                <span>{isPushingAll ? 'Pushing...' : 'Push All Data'}</span>
               </button>
 
               <button
@@ -273,7 +718,7 @@ const FcVisitNotes: React.FC = () => {
         </div>
       </div>
 
-      {/* --- TABLE VIEW COMPONENT --- */}
+      {/* TABLE VIEW - আপডেটেড কলাম */}
       {viewMode === 'list' && (
         <div className="bg-white rounded-2xl border border-slate-200/70 shadow-2xs overflow-hidden w-full">
           <div className="p-4 bg-slate-50/70 border-b border-slate-200/60 font-bold text-xs text-slate-500 uppercase tracking-wider">
@@ -284,15 +729,13 @@ const FcVisitNotes: React.FC = () => {
               No visit notes saved yet. Click "Add Visit Notes" to begin.
             </div>
           ) : (
-            /* রেসপন্সিভ মেকানিজম: বড় স্ক্রিনে ফুল উইডথ নিবে এবং ছোট স্ক্রিনে ডাটা না ভেঙে স্ক্রোল হবে */
             <div className="w-full overflow-x-auto">
               <table className="w-full text-left border-collapse min-w-[1100px] lg:min-w-full table-auto">
                 <thead>
                   <tr className="bg-slate-50/70 border-b border-slate-200/60 text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
-                    {/* উইডথ ও নো-র‌্যাপ প্রোপার্টি দিয়ে ফিল্ড নেম ব্রেকিং ফিক্স করা হয়েছে */}
-                    <th className="py-4 px-5 w-[20%] min-w-[180px]">Children</th>
-                    <th className="py-4 px-4 w-[12%] min-w-[110px]">Case Number</th>
-                    <th className="py-4 px-4 w-[28%] min-w-[260px]">Concerns / Appointments</th>
+                    <th className="py-4 px-5 w-[15%] min-w-[140px]">Family Name</th>
+                    <th className="py-4 px-5 w-[15%] min-w-[140px]">First Name</th>
+                    <th className="py-4 px-4 w-[25%] min-w-[220px]">Concerns / Appointments</th>
                     <th className="py-4 px-4 w-[15%] min-w-[150px]">Appointment Type</th>
                     <th className="py-4 px-4 w-[13%] min-w-[130px]">Date & Time</th>
                     <th className="py-4 px-4 text-center w-[12%] min-w-[100px]">Status</th>
@@ -300,107 +743,102 @@ const FcVisitNotes: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
-                  {notesList.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50/40 transition-all">
-                      {/* Children */}
-                      <td className="py-3.5 px-5 font-bold text-slate-900">
-                        <div className="flex items-center gap-2">
-                          <User size={14} className="text-slate-400 shrink-0" />
-                          <span className="truncate block max-w-[180px]" title={item.children}>
-                            {item.children || 'Not Specified'}
-                          </span>
-                        </div>
-                      </td>
+                  {notesList.map((item) => {
+                    const isPushing = pushingIds.has(item.id || 0);
+                    
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50/40 transition-all">
+                        <td className="py-3.5 px-5 font-bold text-slate-900">
+                          <div className="flex items-center gap-2">
+                            <Users size={14} className="text-slate-400 shrink-0" />
+                            <span>{item.familyName || 'Not Specified'}</span>
+                          </div>
+                        </td>
 
-                      {/* Case Number */}
-                      <td className="py-3.5 px-4 font-semibold text-slate-600">
-                        {item.caseNumber ? (
-                          <span className="inline-flex items-center px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md text-xs font-mono">
-                            {item.caseNumber}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 text-xs italic">N/A</span>
-                        )}
-                      </td>
+                        <td className="py-3.5 px-5 font-bold text-slate-900">
+                          <div className="flex items-center gap-2">
+                            <UserRound size={14} className="text-slate-400 shrink-0" />
+                            <span>{item.firstName || 'Not Specified'}</span>
+                          </div>
+                        </td>
 
-                      {/* Concerns / Appointments */}
-                      <td className="py-3.5 px-4 text-slate-600 font-medium">
-                        {item.concernsAppointments ? (
-                          <div className="flex items-center gap-1.5" title={item.concernsAppointments}>
-                            <AlertCircle size={13} className="text-amber-500 shrink-0" />
-                            <span className="block break-words line-clamp-2 text-xs sm:text-sm">
-                              {item.concernsAppointments}
+                        <td className="py-3.5 px-4 text-slate-600 font-medium">
+                          {item.concernsAppointments ? (
+                            <div className="flex items-center gap-1.5" title={item.concernsAppointments}>
+                              <AlertCircle size={13} className="text-amber-500 shrink-0" />
+                              <span className="block break-words line-clamp-2 text-xs sm:text-sm">
+                                {item.concernsAppointments}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 text-xs italic">No concerns listed</span>
+                          )}
+                        </td>
+
+                        <td className="py-3.5 px-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md text-xs font-medium border border-blue-100">
+                            {item.appointmentType}
+                          </span>
+                        </td>
+
+                        <td className="py-3.5 px-4 text-xs text-slate-500 font-medium whitespace-nowrap">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="flex items-center gap-1 text-slate-700 font-semibold">
+                              <Calendar size={12} className="text-slate-400" /> {item.date}
+                            </span>
+                            <span className="flex items-center gap-1 text-slate-400">
+                              <Clock size={12} /> {item.time}
                             </span>
                           </div>
-                        ) : (
-                          <span className="text-slate-400 text-xs italic">No concerns listed</span>
-                        )}
-                      </td>
+                        </td>
 
-                      {/* Appointment Type */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md text-xs font-medium border border-blue-100">
-                          {item.appointmentType}
-                        </span>
-                      </td>
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                          {item.isCompleted ? (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold tracking-wide bg-emerald-50 text-emerald-700 border border-emerald-100">
+                              <ShieldCheck size={12} className="mr-1 shrink-0"/> Locked
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold tracking-wide bg-purple-50 text-purple-700 border border-purple-100">
+                              <Edit2 size={11} className="mr-1 shrink-0"/> Draft
+                            </span>
+                          )}
+                        </td>
 
-                      {/* Date & Time */}
-                      <td className="py-3.5 px-4 text-xs text-slate-500 font-medium whitespace-nowrap">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="flex items-center gap-1 text-slate-700 font-semibold">
-                            <Calendar size={12} className="text-slate-400" /> {item.date}
-                          </span>
-                          <span className="flex items-center gap-1 text-slate-400">
-                            <Clock size={12} /> {item.time}
-                          </span>
-                        </div>
-                      </td>
+                        <td className="py-3.5 px-5 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={(e) => handlePushSingleData(item, e)}
+                              disabled={isPushing || isPushingAll}
+                              className={`inline-flex items-center gap-1 px-2 py-1 bg-blue-50/60 hover:bg-blue-50 border border-blue-200 text-blue-600 rounded-lg text-xs font-semibold shadow-3xs transition cursor-pointer ${
+                                (isPushing || isPushingAll) ? 'opacity-50 cursor-not-allowed' : ''
+                              }`}
+                            >
+                              {(isPushing || isPushingAll) ? <Loader2 size={12} className="animate-spin" /> : <CloudLightning size={12} />}
+                              <span>{(isPushing || isPushingAll) ? '...' : 'Push'}</span>
+                            </button>
 
-                      {/* Status */}
-                      <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        {item.isCompleted ? (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold tracking-wide bg-emerald-50 text-emerald-700 border border-emerald-100">
-                            <ShieldCheck size={12} className="mr-1 shrink-0"/> Locked
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold tracking-wide bg-purple-50 text-purple-700 border border-purple-100">
-                            <Edit2 size={11} className="mr-1 shrink-0"/> Draft
-                          </span>
-                        )}
-                      </td>
+                            <button
+                              type="button"
+                              onClick={() => handleEdit(item)}
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold shadow-3xs cursor-pointer"
+                            >
+                              {item.isCompleted ? <Eye size={12} /> : <Edit2 size={12} />}
+                              <span>{item.isCompleted ? 'View' : 'Edit'}</span>
+                            </button>
 
-                      {/* Actions */}
-                      <td className="py-3.5 px-5 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={(e) => handlePushSingleData(item, e)}
-                            className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50/60 text-blue-600 border border-blue-200 rounded-lg text-xs font-semibold shadow-3xs cursor-pointer"
-                          >
-                            <CloudLightning size={12} />
-                            <span>Push</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleEdit(item)}
-                            className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-slate-200 text-slate-700 rounded-lg text-xs font-semibold shadow-3xs cursor-pointer"
-                          >
-                            {item.isCompleted ? <Eye size={12} /> : <Edit2 size={12} />}
-                            <span>{item.isCompleted ? 'View' : 'Edit'}</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={(e) => item.id && handleDelete(item.id, e)}
-                            className="inline-flex items-center p-1 bg-white border border-slate-200 text-slate-400 hover:text-red-600 rounded-lg shadow-3xs cursor-pointer"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            <button
+                              type="button"
+                              onClick={(e) => item.id && openDeleteModal(item.id, `${item.firstName} ${item.familyName}` || 'Record', e)}
+                              className="inline-flex items-center p-1 bg-white border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-300 rounded-lg shadow-3xs transition cursor-pointer"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -408,7 +846,7 @@ const FcVisitNotes: React.FC = () => {
         </div>
       )}
 
-      {/* --- DATA ASSESSMENT FORM VIEW --- */}
+      {/* FORM VIEW - আপডেটেড ফর্ম */}
       {viewMode === 'form' && (
         <form onSubmit={(e) => handleSubmit(e)} className="bg-slate-50/60 rounded-2xl p-2 sm:p-4 space-y-6">
           {isReadOnly && (
@@ -417,9 +855,8 @@ const FcVisitNotes: React.FC = () => {
             </div>
           )}
 
-          {/* Core Master Meta Parameters */}
-          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-2xs grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-5">
-            {/* Field: Date */}
+          {/* Core Master Meta Parameters - CaseNumber রিমুভ, FamilyName ও FirstName যোগ */}
+          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-2xs grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-5">
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                 <Calendar size={13} className="text-slate-400" /> Date *
@@ -434,7 +871,6 @@ const FcVisitNotes: React.FC = () => {
               />
             </div>
 
-            {/* Field: Time Dropdown */}
             <div className="relative">
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                 <Clock size={13} className="text-slate-400" /> Time *
@@ -465,85 +901,105 @@ const FcVisitNotes: React.FC = () => {
               )}
             </div>
 
-            {/* Field: Case Number */}
+            {/* Family Name Field */}
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Hash size={13} className="text-slate-400" /> Case Number
+                <Users size={13} className="text-slate-400" /> Family Name *
               </label>
               <input
                 type="text"
-                value={formData.caseNumber}
-                onChange={(e) => updateField('caseNumber', e.target.value)}
-                disabled={isReadOnly}
-                placeholder="e.g. C-8912"
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white disabled:bg-slate-50 disabled:text-slate-400 focus:outline-none focus:border-blue-500 transition font-medium text-slate-700"
-              />
-            </div>
-
-            {/* Field: Children */}
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                Children *
-              </label>
-              <input
-                type="text"
-                value={formData.children}
-                onChange={(e) => updateField('children', e.target.value)}
+                value={formData.familyName || ''}
+                onChange={(e) => updateField('familyName', e.target.value)}
                 disabled={isReadOnly}
                 required
-                placeholder="Enter children names"
+                placeholder="e.g. Smith"
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white disabled:bg-slate-50 disabled:text-slate-400 focus:outline-none focus:border-blue-500 transition font-medium text-slate-700"
               />
             </div>
 
-            {/* Field: Appointment Type Dropdown */}
-            <div className="relative">
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                Appointment Type
+            {/* First Name Field */}
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <UserRound size={13} className="text-slate-400" /> First Name *
               </label>
-              <div 
-                onClick={() => !isReadOnly && setIsTypeDropdownOpen(!isTypeDropdownOpen)}
-                className={`w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white flex items-center justify-between font-medium text-slate-700 cursor-pointer ${isReadOnly ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : ''}`}
-              >
-                <span>{formData.appointmentType}</span>
-                <ChevronDown size={14} className="text-slate-400" />
-              </div>
-
-              {!isReadOnly && isTypeDropdownOpen && (
-                <div className="absolute z-30 w-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto p-1">
-                  {APPOINTMENT_TYPES.map((type) => (
-                    <div
-                      key={type}
-                      onClick={() => {
-                        updateField('appointmentType', type);
-                        setIsTypeDropdownOpen(false);
-                      }}
-                      className={`px-3 py-2 text-xs font-medium rounded-lg cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition ${formData.appointmentType === type ? 'bg-blue-50 text-blue-600' : ''}`}
-                    >
-                      {type}
-                    </div>
-                  ))}
-                </div>
-              )}
+              <input
+                type="text"
+                value={formData.firstName || ''}
+                onChange={(e) => updateField('firstName', e.target.value)}
+                disabled={isReadOnly}
+                required
+                placeholder="e.g. John"
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white disabled:bg-slate-50 disabled:text-slate-400 focus:outline-none focus:border-blue-500 transition font-medium text-slate-700"
+              />
             </div>
           </div>
 
-          {/* Field: Concerns/Appointments Line Element */}
+          {/* Children Field - আলাদা সারিতে */}
           <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-2xs">
             <div className="flex flex-col space-y-1.5">
-              <label className="text-xs font-bold text-slate-700">Concerns / Appointments</label>
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-2">
+                <User size={14} className="text-slate-400" /> Children
+              </label>
               <input
                 type="text"
-                value={formData.concernsAppointments}
-                onChange={(e) => updateField('concernsAppointments', e.target.value)}
+                value={formData.children || ''}
+                onChange={(e) => updateField('children', e.target.value)}
                 disabled={isReadOnly}
-                placeholder="Enter concerns or appointment notes"
+                placeholder="Enter children names"
                 className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 text-sm font-medium transition disabled:bg-slate-50 text-slate-800"
               />
             </div>
           </div>
 
-          {/* Section 1: Development Metrics */}
+          {/* Appointment Type Dropdown */}
+          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-2xs">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="relative">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  Appointment Type
+                </label>
+                <div 
+                  onClick={() => !isReadOnly && setIsTypeDropdownOpen(!isTypeDropdownOpen)}
+                  className={`w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white flex items-center justify-between font-medium text-slate-700 cursor-pointer ${isReadOnly ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : ''}`}
+                >
+                  <span>{formData.appointmentType}</span>
+                  <ChevronDown size={14} className="text-slate-400" />
+                </div>
+
+                {!isReadOnly && isTypeDropdownOpen && (
+                  <div className="absolute z-30 w-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto p-1">
+                    {APPOINTMENT_TYPES.map((type) => (
+                      <div
+                        key={type}
+                        onClick={() => {
+                          updateField('appointmentType', type);
+                          setIsTypeDropdownOpen(false);
+                        }}
+                        className={`px-3 py-2 text-xs font-medium rounded-lg cursor-pointer hover:bg-blue-50 hover:text-blue-600 transition ${formData.appointmentType === type ? 'bg-blue-50 text-blue-600' : ''}`}
+                      >
+                        {type}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <AlertCircle size={13} className="text-slate-400" /> Concerns / Appointments
+                </label>
+                <input
+                  type="text"
+                  value={formData.concernsAppointments || ''}
+                  onChange={(e) => updateField('concernsAppointments', e.target.value)}
+                  disabled={isReadOnly}
+                  placeholder="Enter concerns or appointment notes"
+                  className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white disabled:bg-slate-50 disabled:text-slate-400 focus:outline-none focus:border-blue-500 transition font-medium text-slate-700"
+                />
+              </div>
+            </div>
+          </div>
+
           <FormSection title="Program, Activities & Development">
             <FormTextArea label="Baby/Toddler programs enrolled in, growth, & development" field="babyProgramsGrowth" formData={formData} isReadOnly={isReadOnly} updateField={updateField} />
             <FormTextArea label="School Activities" field="schoolActivities" formData={formData} isReadOnly={isReadOnly} updateField={updateField} />
@@ -551,13 +1007,12 @@ const FcVisitNotes: React.FC = () => {
             <FormTextArea label="Purchases for child, such as clothing, diapers, etc. (amount should reflect $75/month): Receipts" field="purchasesForChild" formData={formData} isReadOnly={isReadOnly} updateField={updateField} />
           </FormSection>
 
-          {/* Section 2: Summarized Logs */}
           <FormSection title="Visits & Behavior Assessment">
             <FormTextArea label="Family Visits, dates with Summary" field="familyVisitsSummary" formData={formData} isReadOnly={isReadOnly} updateField={updateField} />
             <FormTextArea label="Child Issues, behaviors, concerns, comments" field="childIssuesBehaviors" formData={formData} isReadOnly={isReadOnly} updateField={updateField} />
           </FormSection>
 
-          {/* Section 3: Checkbox Environmental Matrix */}
+          {/* Safety Checkboxes */}
           <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-2xs space-y-4">
             <div className="text-blue-700 font-extrabold text-sm tracking-wider uppercase border-b border-slate-100 pb-2 mb-2">
               Child Issues, behaviors, concerns (Home Safety Verification)
@@ -592,7 +1047,6 @@ const FcVisitNotes: React.FC = () => {
             </div>
           </div>
 
-          {/* Section 4: Home Logistics */}
           <FormSection title="Home Environment & Logistics">
             <FormTextArea label="Where do the children sleep?" field="childrenSleepLocation" formData={formData} isReadOnly={isReadOnly} updateField={updateField} />
             <FormTextArea label="Where are medications stored?" field="medicationsStorage" formData={formData} isReadOnly={isReadOnly} updateField={updateField} />
@@ -600,15 +1054,13 @@ const FcVisitNotes: React.FC = () => {
             <FormTextArea label="Phone numbers and email address up to date?" field="contactInfoUpToDate" formData={formData} isReadOnly={isReadOnly} updateField={updateField} />
           </FormSection>
 
-          {/* Section 5: Signature Node */}
           <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-2xs space-y-5">
             <FormTextArea label="Additional Comments" field="additionalComments" formData={formData} isReadOnly={isReadOnly} updateField={updateField} />
-            
             <div className="flex flex-col space-y-1.5 md:w-1/2 pt-2">
               <label className="text-xs font-bold text-slate-700">Foster Care Assistant Signature *</label>
               <input
                 type="text"
-                value={formData.fosterCareAssistantSignature}
+                value={formData.fosterCareAssistantSignature || ''}
                 onChange={(e) => updateField('fosterCareAssistantSignature', e.target.value)}
                 disabled={isReadOnly}
                 required
@@ -640,7 +1092,6 @@ const FcVisitNotes: React.FC = () => {
             </div>
           </div>
 
-          {/* Form Control Triggers */}
           <div className="flex justify-end items-center gap-2 pt-5 border-t border-slate-200/80">
             <button 
               type="button" 

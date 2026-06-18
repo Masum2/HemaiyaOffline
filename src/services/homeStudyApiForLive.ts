@@ -10,12 +10,11 @@ export interface HomeStudySyncResponse {
   success: boolean;
   message: string;
   syncedId?: number;
-  caseNumber?: string;
   data?: any;
 }
 
 // 📤 Payload Builder Function
-const buildHomeStudyPayload = (safeData: any, caseNumber: string) => {
+const buildHomeStudyPayload = (safeData: any) => {
   return {
     id: safeData.id || 0,
     assessmentDate: safeData.assessmentDate || new Date().toISOString().split('T')[0],
@@ -76,17 +75,19 @@ const buildHomeStudyPayload = (safeData: any, caseNumber: string) => {
     createdBy: safeData.createdBy || 'Kona_Supervisor',
     createdOn: safeData.createdOn || new Date().toISOString(),
     
-    caseNumber: caseNumber
+    familyName: safeData.familyName || '',
+    firstName: safeData.firstName || ''
   };
 };
 
 // 🎭 Mock Sync Function
-const mockSyncHomeStudy = async (caseNumber: string, assessmentData: any): Promise<HomeStudySyncResponse> => {
+const mockSyncHomeStudy = async (familyName: string, firstName: string, assessmentData: any): Promise<HomeStudySyncResponse> => {
   console.log('🎭 ===== MOCK HOME STUDY SYNC STARTED =====');
-  console.log('📌 Case Number:', caseNumber);
+  console.log('📌 Family Name:', familyName);
+  console.log('📌 First Name:', firstName);
   console.log('📦 Assessment Data:', assessmentData);
   
-  const payload = buildHomeStudyPayload(assessmentData, caseNumber);
+  const payload = buildHomeStudyPayload(assessmentData);
   
   console.log('📤 ===== COMPLETE HOME STUDY PAYLOAD =====');
   console.log(JSON.stringify(payload, null, 2));
@@ -98,7 +99,6 @@ const mockSyncHomeStudy = async (caseNumber: string, assessmentData: any): Promi
     success: true,
     message: '✅ Home Study Assessment synced successfully (MOCK MODE)',
     syncedId: Math.floor(Math.random() * 10000),
-    caseNumber: caseNumber,
     data: {
       ...payload,
       syncedAt: new Date().toISOString(),
@@ -128,21 +128,26 @@ export const checkHomeStudyAPIHealth = async (): Promise<boolean> => {
   }
 };
 
-// 📤 Main Sync Function - একক রেকর্ড Push
-export const syncHomeStudy = async (caseNumber: string, assessmentData: any): Promise<HomeStudySyncResponse> => {
+// 📤 Main Sync Function - FamilyName ও FirstName দিয়ে
+export const syncHomeStudy = async (familyName: string, firstName: string, assessmentData: any): Promise<HomeStudySyncResponse> => {
   if (USE_MOCK_MODE) {
-    return await mockSyncHomeStudy(caseNumber, assessmentData);
+    return await mockSyncHomeStudy(familyName, firstName, assessmentData);
   }
   
   try {
     const safeData = assessmentData || {};
-    const encodedCaseNumber = encodeURIComponent(caseNumber || 'DEFAULT-CASE');
-    const url = `${API_BASE_URL}/sync?caseNumber=${encodedCaseNumber}`;
+    const encodedFamilyName = encodeURIComponent(familyName || 'UNKNOWN');
+    const encodedFirstName = encodeURIComponent(firstName || 'UNKNOWN');
     
-    console.log('🔄 Syncing home study assessment for case:', caseNumber);
+    // 🔥 URL: http://localhost:5096/api/sync/familyName/firstName
+    const url = `${API_BASE_URL}/sync/${encodedFamilyName}/${encodedFirstName}`;
+    
+    console.log('🔄 Syncing home study assessment...');
+    console.log('📌 Family Name:', familyName);
+    console.log('📌 First Name:', firstName);
     console.log('📡 API URL:', url);
     
-    const payload = buildHomeStudyPayload(safeData, caseNumber);
+    const payload = buildHomeStudyPayload(safeData);
     
     console.log('📤 Final Home Study Payload:', JSON.stringify(payload, null, 2));
 
@@ -167,7 +172,6 @@ export const syncHomeStudy = async (caseNumber: string, assessmentData: any): Pr
       success: true,
       message: result.message || 'Home Study Assessment synced successfully',
       syncedId: result.id || result.syncedId,
-      caseNumber: caseNumber,
       data: result
     };
     
@@ -176,27 +180,29 @@ export const syncHomeStudy = async (caseNumber: string, assessmentData: any): Pr
     return {
       success: false,
       message: error.message || 'Network error',
-      caseNumber: caseNumber
     };
   }
 };
 
-// 📤 Bulk Sync Function - সব রেকর্ড Push
+// 📤 Bulk Sync Function
 export const syncMultipleHomeStudies = async (assessments: any[]): Promise<{
   success: boolean;
-  results: Array<{ caseNumber: string; success: boolean; error?: string }>;
+  results: Array<{ index: number; success: boolean; error?: string }>;
   totalSynced: number;
 }> => {
   try {
     const results = [];
     let successCount = 0;
 
-    for (const assessment of assessments) {
-      const caseNumber = assessment.caseNumber || `HOME-STUDY-${assessment.id}`;
-      const result = await syncHomeStudy(caseNumber, assessment);
+    for (let i = 0; i < assessments.length; i++) {
+      const assessment = assessments[i];
+      const familyName = assessment.familyName || '';
+      const firstName = assessment.firstName || '';
+      
+      const result = await syncHomeStudy(familyName, firstName, assessment);
       
       results.push({
-        caseNumber: caseNumber,
+        index: i,
         success: result.success,
         error: result.success ? undefined : result.message
       });

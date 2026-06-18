@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, ShieldCheck, Check, Save, X, FileText, List, Plus, Edit2, Eye, Trash2, CloudLightning, ChevronDown, Hash, User, RefreshCw, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Calendar, Clock, ShieldCheck, Check, Save, X, FileText, List, Plus, Edit2, Eye, Trash2, CloudLightning, ChevronDown, Hash, User, RefreshCw, Loader2, AlertTriangle, CheckCircle2, Users, UserRound } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import type { HomeStudyAssessmentData } from '../types/homeStudy';
 import { homeStudyService } from '../services/homeStudyService';
@@ -26,8 +26,8 @@ const TIME_OPTIONS = (() => {
 const INITIAL_FORM_STATE: HomeStudyAssessmentData = {
   assessmentDate: new Date().toISOString().split('T')[0],
   assessmentTime: '10:00 AM',
-  caseNumber: '',
-  caregiverId: '',
+  familyName: '',
+  firstName: '',
   caregiverName: '',
   contacts: '',
   sourceOfReferral: '',
@@ -68,6 +68,7 @@ const INITIAL_FORM_STATE: HomeStudyAssessmentData = {
   moneyHandled: '',
   financialPicture: '',
   isCompleted: false,
+  caregiverId: ''
 };
 
 // --- Sub-components ---
@@ -138,10 +139,9 @@ const PushSuccessModal: React.FC<PushSuccessModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-      <div className="fixed inset-0 bg-slate-900/50 " onClick={onClose} />
+      <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={onClose} />
       
       <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all scale-100 animate-in zoom-in-95 duration-150">
-        {/* Header with gradient */}
         <div className={`px-6 py-4 ${hasErrors ? 'bg-gradient-to-r from-amber-50 to-white border-b border-amber-200' : 'bg-gradient-to-r from-emerald-50 to-white border-b border-emerald-200'}`}>
           <div className="flex items-center gap-3">
             <div className={`w-10 h-10 rounded-full flex items-center justify-center ${hasErrors ? 'bg-amber-100' : 'bg-emerald-100'}`}>
@@ -166,9 +166,7 @@ const PushSuccessModal: React.FC<PushSuccessModalProps> = ({
           </button>
         </div>
 
-        {/* Body */}
         <div className="px-6 py-5 space-y-4">
-          {/* Main Message */}
           <div className="text-center">
             <div className={`mx-auto w-14 h-14 rounded-full flex items-center justify-center mb-3 ${hasErrors ? 'bg-amber-50' : 'bg-emerald-50'}`}>
               {hasErrors ? (
@@ -183,7 +181,6 @@ const PushSuccessModal: React.FC<PushSuccessModalProps> = ({
             )}
           </div>
 
-          {/* Bulk Sync Stats */}
           {isBulk && (
             <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
               <div className="grid grid-cols-3 gap-2 text-center">
@@ -205,7 +202,6 @@ const PushSuccessModal: React.FC<PushSuccessModalProps> = ({
             </div>
           )}
 
-          {/* Single Sync Details */}
           {!isBulk && syncedId && (
             <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
               <div className="flex items-center justify-between text-xs">
@@ -221,7 +217,6 @@ const PushSuccessModal: React.FC<PushSuccessModalProps> = ({
             </div>
           )}
 
-          {/* Action Button */}
           <button
             onClick={onClose}
             className={`w-full py-2.5 rounded-xl text-sm font-semibold text-white transition-all active:scale-95 shadow-md ${
@@ -305,8 +300,8 @@ const FcHomeStudyAssessment: React.FC = () => {
     if (e) e.preventDefault();
     const dataToSave = updatedData || formData;
 
-    if (!dataToSave.caregiverName) {
-      toast.error('❌ Caregiver Name is required!');
+    if (!dataToSave.familyName || !dataToSave.firstName) {
+      toast.error('❌ Family Name and First Name are required!');
       return;
     }
 
@@ -380,7 +375,7 @@ const FcHomeStudyAssessment: React.FC = () => {
     }
   };
 
-  // 📤 একক রেকর্ড Push - Success Modal সহ
+  // 📤 একক রেকর্ড Push - FamilyName ও FirstName দিয়ে
   const handlePushSingleData = async (item: HomeStudyAssessmentData, e: React.MouseEvent) => {
     e.stopPropagation();
     
@@ -390,24 +385,27 @@ const FcHomeStudyAssessment: React.FC = () => {
       return;
     }
 
+    if (!item.familyName || !item.firstName) {
+      toast.error('❌ Family Name and First Name are required to sync!');
+      return;
+    }
+
     setPushingIds(prev => new Set(prev).add(item.id || 0));
-    const toastId = toast.loading(`Syncing: ${item.caregiverName || 'Unknown'}...`);
+    const toastId = toast.loading(`Syncing: ${item.familyName}, ${item.firstName}...`);
     
     try {
-      const caseNumber = item.caseNumber || `HOME-STUDY-${item.id}`;
-      const result = await syncHomeStudy(caseNumber, item);
+      const result = await syncHomeStudy(item.familyName, item.firstName, item);
       
       if (result.success) {
-        toast.success(`✅ ${item.caregiverName} synced successfully!`, { id: toastId });
+        toast.success(`✅ ${item.firstName} ${item.familyName} synced successfully!`, { id: toastId });
         console.log('✅ Push Result:', result.data);
         
-        // 🎉 Show Success Modal
         setPushModalData({
-          title: `${item.caregiverName || 'Record'} Synced`,
-          message: 'The assessment data has been successfully pushed to the server.',
+          title: `${item.firstName} ${item.familyName} Synced`,
+          message: 'The home study assessment has been successfully pushed to the server.',
           details: 'Your data is now securely stored in the cloud.',
           syncedId: result.syncedId,
-          caseNumber: caseNumber,
+          caseNumber: undefined,
           isBulk: false,
           totalSynced: 0,
           totalRecords: 0,
@@ -415,11 +413,11 @@ const FcHomeStudyAssessment: React.FC = () => {
         });
         setShowPushModal(true);
       } else {
-        toast.error(`❌ Failed to sync ${item.caregiverName}: ${result.message}`, { id: toastId });
+        toast.error(`❌ Failed to sync ${item.firstName} ${item.familyName}: ${result.message}`, { id: toastId });
       }
     } catch (error) {
       console.error('Error pushing data:', error);
-      toast.error(`❌ Failed to sync ${item.caregiverName}`, { id: toastId });
+      toast.error(`❌ Failed to sync ${item.firstName} ${item.familyName}`, { id: toastId });
     } finally {
       setPushingIds(prev => {
         const newSet = new Set(prev);
@@ -429,7 +427,7 @@ const FcHomeStudyAssessment: React.FC = () => {
     }
   };
 
-  // 📤 সব রেকর্ড Push - Success Modal সহ
+  // 📤 সব রেকর্ড Push
   const handlePushAllData = async () => {
     if (assessmentsList.length === 0) {
       toast.error('⚠️ No offline data available to push.');
@@ -446,18 +444,12 @@ const FcHomeStudyAssessment: React.FC = () => {
     const toastId = toast.loading(`Syncing total ${assessmentsList.length} records...`);
     
     try {
-      const assessmentsForApi = assessmentsList.map(record => ({
-        ...record,
-        caseNumber: record.caseNumber || `HOME-STUDY-${record.id}`
-      }));
-
-      const result = await syncMultipleHomeStudies(assessmentsForApi);
+      const result = await syncMultipleHomeStudies(assessmentsList);
       
       if (result.success) {
         toast.success(`✅ All ${result.totalSynced} records synced successfully!`, { id: toastId });
         console.log('✅ Bulk Push Results:', result.results);
         
-        // 🎉 Show Success Modal with Bulk Stats
         const failedResults = result.results.filter(r => !r.success);
         setPushModalData({
           title: 'Bulk Sync Complete',
@@ -668,8 +660,8 @@ const FcHomeStudyAssessment: React.FC = () => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50/70 border-b border-slate-200/60 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                    <th className="py-3 px-4 sm:px-5">Caregiver Name</th>
-                    <th className="py-3 px-4">Case Number</th>
+                    <th className="py-3 px-4 sm:px-5">Family Name</th>
+                    <th className="py-3 px-4 sm:px-5">First Name</th>
                     <th className="py-3 px-4">Assessment Date & Time</th>
                     <th className="py-3 px-4 text-center">Status</th>
                     <th className="py-3 px-4 text-right sm:pr-5">Actions</th>
@@ -683,19 +675,16 @@ const FcHomeStudyAssessment: React.FC = () => {
                       <tr key={item.id} className="hover:bg-slate-50/40 transition-all">
                         <td className="py-3.5 px-4 sm:px-5 font-bold text-slate-900">
                           <div className="flex items-center gap-2">
-                            <User size={14} className="text-slate-400 shrink-0" />
-                            <span>{item.caregiverName || 'Not Specified'}</span>
+                            <Users size={14} className="text-slate-400 shrink-0" />
+                            <span>{item.familyName || 'Not Specified'}</span>
                           </div>
                         </td>
                         
-                        <td className="py-3.5 px-4 font-semibold text-slate-600">
-                          {item.caseNumber ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md text-xs font-mono">
-                              {item.caseNumber}
-                            </span>
-                          ) : (
-                            <span className="text-slate-400 text-xs italic">N/A</span>
-                          )}
+                        <td className="py-3.5 px-4 sm:px-5 font-bold text-slate-900">
+                          <div className="flex items-center gap-2">
+                            <UserRound size={14} className="text-slate-400 shrink-0" />
+                            <span>{item.firstName || 'Not Specified'}</span>
+                          </div>
                         </td>
 
                         <td className="py-3.5 px-4 text-xs text-slate-500 font-medium">
@@ -748,7 +737,7 @@ const FcHomeStudyAssessment: React.FC = () => {
 
                             <button
                               type="button"
-                              onClick={(e) => item.id && openDeleteModal(item.id, item.caregiverName || 'Record', e)}
+                              onClick={(e) => item.id && openDeleteModal(item.id, `${item.firstName} ${item.familyName}` || 'Record', e)}
                               className="inline-flex items-center justify-center p-1 bg-white hover:bg-red-50 border border-slate-200 hover:border-red-200 text-slate-400 hover:text-red-600 rounded-lg shadow-3xs transition cursor-pointer"
                               title="Delete record"
                             >
@@ -775,7 +764,7 @@ const FcHomeStudyAssessment: React.FC = () => {
             </div>
           )}
 
-          {/* ... Rest of the form remains the same ... */}
+          {/* Basic Meta Fields - CaseNumber রিমুভ, FamilyName & FirstName যোগ */}
           <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-2xs grid grid-cols-1 md:grid-cols-4 gap-5">
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -821,23 +810,44 @@ const FcHomeStudyAssessment: React.FC = () => {
               )}
             </div>
 
+            {/* Family Name Field */}
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Hash size={13} className="text-slate-400" /> Case Number
+                <Users size={13} className="text-slate-400" /> Family Name *
               </label>
               <input
                 type="text"
-                value={formData.caseNumber || ''}
-                onChange={(e) => updateField('caseNumber', e.target.value)}
+                value={formData.familyName || ''}
+                onChange={(e) => updateField('familyName', e.target.value)}
                 disabled={isReadOnly}
-                placeholder="e.g. CS-9872"
+                required
+                placeholder="e.g. Smith"
                 className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white disabled:bg-slate-50 disabled:text-slate-400 focus:outline-none focus:border-blue-500 transition font-medium text-slate-700"
               />
             </div>
 
+            {/* First Name Field */}
             <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                Caregiver Name *
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <UserRound size={13} className="text-slate-400" /> First Name *
+              </label>
+              <input
+                type="text"
+                value={formData.firstName || ''}
+                onChange={(e) => updateField('firstName', e.target.value)}
+                disabled={isReadOnly}
+                required
+                placeholder="e.g. John"
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white disabled:bg-slate-50 disabled:text-slate-400 focus:outline-none focus:border-blue-500 transition font-medium text-slate-700"
+              />
+            </div>
+          </div>
+
+          {/* Caregiver Name - আলাদা সারিতে */}
+          <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-2xs">
+            <div className="flex flex-col space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 flex items-center gap-2">
+                <User size={14} className="text-slate-400" /> Caregiver Name *
               </label>
               <input
                 type="text"
@@ -846,11 +856,12 @@ const FcHomeStudyAssessment: React.FC = () => {
                 disabled={isReadOnly}
                 required
                 placeholder="Enter Caregiver Name"
-                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white disabled:bg-slate-50 disabled:text-slate-400 focus:outline-none focus:border-blue-500 transition font-medium text-slate-700"
+                className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 text-sm font-medium transition disabled:bg-slate-50 text-slate-800"
               />
             </div>
           </div>
 
+          {/* Contacts Section */}
           <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-2xs space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <FormTextArea label="Contacts" field="contacts" formData={formData} isReadOnly={isReadOnly} updateField={updateField} />
@@ -924,6 +935,7 @@ const FcHomeStudyAssessment: React.FC = () => {
             <FormTextArea label="Describe your future and present financial picture?" field="financialPicture" formData={formData} isReadOnly={isReadOnly} updateField={updateField} />
           </FormSection>
 
+          {/* Lock Configuration */}
           <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/70 shadow-2xs">
             <div 
               onClick={handleToggleComplete}
@@ -946,6 +958,7 @@ const FcHomeStudyAssessment: React.FC = () => {
             </div>
           </div>
 
+          {/* Bottom Actions */}
           <div className="flex justify-end items-center gap-2 pt-5 border-t border-slate-200/80">
             <button 
               type="button" 
